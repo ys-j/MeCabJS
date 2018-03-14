@@ -1,0 +1,27 @@
+button {
+	-webkit-appearance: none;
+	-moz-appearance: none;
+	appearance: none;
+	cursor: pointer;
+	padding: 1em;
+	border: thin solid;
+	border-radius: .5em;
+	background-color: #fff;
+	color: #323232;
+	border-color: #ddd;
+}
+button:hover {
+	color: #327fc7;
+	border-color: #327fc7;
+}
+button:active {
+	background-color: #327fc7;
+	color: #fff;
+	border-color: #fff;
+}
+button[disabled], button[disabled]:hover {
+	cursor: auto;
+	background-color: #ddd;
+	color: #fff;
+	border-color: #aaa;
+}
