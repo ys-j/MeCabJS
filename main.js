@@ -65,14 +65,14 @@ function registerDictionary(ev) {
 					let c = words[i].split('\t');
 					let token = {
 						word: c[0],
-						id: c[1] === c[2] ? Number(c[1]) : [ Number(c[1]), Number(c[2]) ],
-						cost: Number(c[3]),
-						pos: POSID[c.slice(4, 8).join()],
+						id: Number(c[1]),
+						cost: Number(c[2]),
+						pos: Number(c[3]),
 					}
-					if (c[8] && c[8] !== '*') token.cjg = [ c[8], c[9] ];
-					if (c[10] !== c[0]) token.base = c[10];
-					if (c[11] !== c[0]) token.orth = c[11];
-					if (c[12] !== c[11]) token.pron = c[12];
+					if (c[4]) token.cjg = [ c[4], c[5] ];
+					if (c[6]) token.base = c[6];
+					if (c[7]) token.orth = c[7];
+					if (c[8]) token.pron = c[8];
 
 					let addReq = dictionary.add(token);
 					addReq.onsuccess = () => {
