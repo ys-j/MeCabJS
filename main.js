@@ -68,7 +68,7 @@ function registerDictionary(ev) {
 						id: Number(c[1]),
 						cost: Number(c[2]),
 						pos: Number(c[3]),
-					}
+					};
 					if (c[4]) token.cjg = [ c[4], c[5] ];
 					if (c[6]) token.base = c[6];
 					if (c[7]) token.orth = c[7];
@@ -76,15 +76,18 @@ function registerDictionary(ev) {
 
 					let addReq = dictionary.add(token);
 					addReq.onsuccess = () => {
-						dicstatus.value = '辞書を読み込んでいます ( ' + (i+1) + ' / ' + wordsLen + ' )';
+						if (i+1 === wordsLen) {
+							dicstatus.value = '辞書の読み込みが完了しました';
+						} else {
+							dicstatus.value = '辞書を読み込んでいます ( ' + (i+1) + ' / ' + wordsLen + ' )';
+						}
+					};
+					addReq.onerror = () => {
+						dicstatus.value = 'エラーが発生しました';
 					};
 				}
 			});
 		};
-	};
-	openReq.onsuccess = e => {
-		ev.target.disabled = false;
-		dicstatus.value = '辞書の読み込みが完了しました';
 	};
 }
 
