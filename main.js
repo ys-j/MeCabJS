@@ -44,58 +44,35 @@ function lookup(chars) {
 	return rslt;
 }
 
+let buttons = document.querySelectorAll('#dic > button');
 let dicstatus = document.getElementById('dicstatus');
 
-function registerDictionary(ev) {
-	ev.target.disabled = true;
-	let openReq = indexedDB.open('ipadic');
-	openReq.onupgradeneeded = e => {
-		dicstatus.value = '辞書の読み込みを開始しています';
-
-		let db = e.target.result;
-		let store = db.createObjectStore('dictionary', { keyPath: 'word' });
-		store.createIndex('word', 'word');
-		store.transaction.oncomplete = () => {
-			let dictionary = db.transaction('dictionary', 'readwrite').objectStore('dictionary');
-			fetch('dic.min.tsv.gz').then(res => res.arrayBuffer()).then(buffer => {
-				let u8array = new Zlib.Gunzip(new Uint8Array(buffer)).decompress();
-				let words = new TextDecoder().decode(u8array).split('\r\n');
-				let wordsLen = words.length;
-				for (let i = 0; i < wordsLen; i++) {
-					let c = words[i].split('\t');
-					let token = {
-						word: c[0],
-						id: Number(c[1]),
-						cost: Number(c[2]),
-						pos: Number(c[3]),
-					};
-					if (c[4]) token.cjg = [ c[4], c[5] ];
-					if (c[6]) token.base = c[6];
-					if (c[7]) token.orth = c[7];
-					if (c[8]) token.pron = c[8];
-
-					let addReq = dictionary.add(token);
-					addReq.onsuccess = () => {
-						if (i+1 === wordsLen) {
-							dicstatus.value = '辞書の読み込みが完了しました';
-						} else {
-							dicstatus.value = '辞書を読み込んでいます ( ' + (i+1) + ' / ' + wordsLen + ' )';
-						}
-					};
-					addReq.onerror = () => {
-						dicstatus.value = 'エラーが発生しました';
-					};
-				}
-			});
-		};
+function registerDictionary() {
+	buttons[0].disabled = true;
+	buttons[1].disabled = true;
+	dicstatus.value = '辞書の読み込みを開始しています';
+	const WORKER = new Worker('setdic.js');
+	WORKER.onmessage = e => {
+		if (Number(e.data) === 100) {
+			dicstatus.value = '辞書の読み込みが完了しました';
+		} else {
+			dicstatus.value = '辞書を読み込んでいます (' + e.data + '%)';
+		}
 	};
+	WORKER.onerror = e => {
+		dicstatus.value = 'エラーが発生しました';
+	};
+	WORKER.postMessage(null);
 }
 
-function deleteDictionary(ev) {
-	ev.target.disabled = true;
+function deleteDictionary() {
+	buttons[0].disabled = true;
+	buttons[1].disabled = true;
+	dicstatus.value = '辞書を削除しています';
 	let req = indexedDB.deleteDatabase('ipadic');
 	req.onsuccess = () => {
-		ev.target.disabled = false;
+		buttons[0].disabled = false;
+		buttons[1].disabled = false;
 		dicstatus.value = '辞書を削除しました';
 	};
 }
