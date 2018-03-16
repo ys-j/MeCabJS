@@ -1,8 +1,20 @@
+body {
+	text-align: center;
+	font-size: 90%;
+	line-height: 1.6;
+}
+:lang(en) {
+	font-style: italic;
+}
+main, table {
+	margin: 1em auto;
+}
 button {
 	-webkit-appearance: none;
 	-moz-appearance: none;
 	appearance: none;
 	cursor: pointer;
+	margin: .5em;
 	padding: 1em;
 	border: thin solid;
 	border-radius: .5em;
@@ -14,14 +26,34 @@ button:hover {
 	color: #327fc7;
 	border-color: #327fc7;
 }
-button:active {
+button:active, button.active[disabled] {
 	background-color: #327fc7;
 	color: #fff;
 	border-color: #fff;
 }
-button[disabled], button[disabled]:hover {
+button[disabled] {
 	cursor: auto;
 	background-color: #ddd;
 	color: #fff;
 	border-color: #aaa;
+}
+#dicstatus {
+	display: block;
+	margin: 1em auto;
+}
+form {
+	display: flex;
+	justify-content: center;
+	align-items: center;
+}
+textarea {
+	flex: 1 1 40em;
+}
+th:not(:empty) {
+	background-color: #ddd;
+}
+footer {
+	margin: 1em auto;
+	padding: 1em 0;
+	border-top: thin solid #ddd;
 }

@@ -1,82 +1,5 @@
-class IDBPromise {
-	constructor(dbname) {
-		this.name = dbname;
-	}
-	open() {
-		return new Promise((resolve, reject) => {
-			let req = indexedDB.open(this.name);
-			req.onsuccess = resolve;
-			req.onerror = reject;
-		})
-	}
-}
-
-
-class Token {
-	constructor(data) {
-		this.name = '';
-	}
-}
-
-class Lattice {
-	constructor(input) {
-		let chars = [...input];
-		let paths = [];
-		for (let i = 0; i < chars.length; i++) {
-			for (let j = i; j < chars.length; j++) {
-				let matches = lookup(chars.slice(i, j+1));
-				for (let k = 0; k < matches.length; k++) {
-					paths.push(matches[k]);
-				}
-			}
-		}
-		this.chars = chars;
-		this.paths = paths;
-	}
-}
-
-function lookup(chars) {
-	let str = chars.join('');
-	let rslt = [];
-	EXAMPLE.forEach(v => {
-		if (v.word === str) rslt.push(v);
-	});
-	return rslt;
-}
-
-let buttons = document.querySelectorAll('#dic > button');
-let dicstatus = document.getElementById('dicstatus');
-
-function registerDictionary() {
-	buttons[0].disabled = true;
-	buttons[1].disabled = true;
-	dicstatus.value = '辞書の読み込みを開始しています';
-	const WORKER = new Worker('setdic.js');
-	WORKER.onmessage = e => {
-		if (Number(e.data) === 100) {
-			dicstatus.value = '辞書の読み込みが完了しました';
-		} else {
-			dicstatus.value = '辞書を読み込んでいます (' + e.data + '%)';
-		}
-	};
-	WORKER.onerror = e => {
-		dicstatus.value = 'エラーが発生しました';
-	};
-	WORKER.postMessage(null);
-}
-
-function deleteDictionary() {
-	buttons[0].disabled = true;
-	buttons[1].disabled = true;
-	dicstatus.value = '辞書を削除しています';
-	let req = indexedDB.deleteDatabase('ipadic');
-	req.onsuccess = () => {
-		buttons[0].disabled = false;
-		buttons[1].disabled = false;
-		dicstatus.value = '辞書を削除しました';
-	};
-}
-
+const DIC_NAME = 'naist-jdic';
+const COST_CORRECTION = 10000; // min_cost: -8456;
 const POSID = [
 	['その他', '間投'], // 0
 	['フィラー'], // 1
@@ -148,7 +71,237 @@ const POSID = [
 	['名詞', '副詞可能'], // 67
 	['連体詞'], // 68
 ];
+const BOS = {
+	word: '\x02',
+	id: 0,
+	cost: 0,
+	start: 0,
+	end: 1,
+};
+const EOS = {
+	word: '\x03',
+	id: 0,
+	cost: 0,
+};
+
+class Path extends Array {
+	constructor(array) {
+		super();
+		let len = array.length;
+		for (let i = 0; i < len; i++) this[i] = array[i];
+		this.length = len;
+		this.cost = 0;
+	}
+	last() {
+		return this[this.length - 1];
+	}
+}
+
+class Lattice {
+	constructor(input) {
+		this.input = [...input];
+	}
+	lookup() {
+		let chars = this.input;
+		const CHAR_LENGTH = chars.length;
+		return new Promise((resolve, reject) => {
+			indexedDB.open(DIC_NAME).onsuccess = e => {
+				let db = e.target.result;
+				let dic = db.transaction(['dictionary'], 'readonly').objectStore('dictionary').index('index');
+				let targets = [], promises = [];
+				for (let i = 0; i < CHAR_LENGTH; i++) {
+					for (let j = i; j < CHAR_LENGTH; j++) {
+						promises.push(new Promise((resolve, reject) => {
+							let targetKey = chars.slice(i, j+1).join('');
+							dic.openCursor(targetKey).onsuccess = e => {
+								let cursor = e.target.result;
+								if (cursor) {
+									cursor.value.start = i + 1;
+									cursor.value.end = j + 2;
+									targets.push(cursor.value);
+									cursor.continue();
+								} else {
+									resolve();
+								}
+							}
+						}));
+					}
+				}
+				Promise.all(promises).then(() => {
+					targets.push(Object.assign({}, BOS), Object.assign({
+						start: CHAR_LENGTH + 1,
+						end: CHAR_LENGTH + 2,
+					}, EOS));
+					this.words = targets.sort((a, b) => {
+						return a.start - b.start || a.end - b.end;
+					});
+					resolve(this.words);
+				}, reject);
+			};
+		});
+	}
+	dijkstra() {
+		let words = this.words;
+		let len = words.length;
+		let costs = new Array(len).fill().map(() => new Array(len));
+		return new Promise((resolve, reject) => {
+			let promises = [];
+			indexedDB.open(DIC_NAME).onsuccess = e => {
+				let db = e.target.result;
+				let matrix = db.transaction(['matrix'], 'readonly').objectStore('matrix');
+				for (let x = 0; x < len; x++) {
+					for (let y = 0; y < len; y++) {
+						if (words[x].start === words[y].end) {
+							promises.push(new Promise((resolve, reject) => {
+								matrix.get([words[x].id, words[y].id]).onsuccess = e => {
+									costs[x][y] = e.target.result.cost + words[y].cost + COST_CORRECTION * 2;
+									resolve();
+								};
+							}));
+						} else {
+							costs[x][y] = Infinity;
+						}
+					}
+				}
+				Promise.all(promises).then(() => {
+					let vertex = new Array(len).fill().map(() => ({
+						cost: Infinity,
+						next: -1,
+						visited: false,
+					}));
+					vertex[len-1] = {
+						cost: words[len-1].cost, // 0
+						next: len,
+						visited: false,
+					};
+					while (true) {
+						let min = Infinity;
+						for (let i = 0; i < len; i++) {
+							if (!vertex[i].visited && vertex[i].cost < min) min = vertex[i].cost;
+						}
+						if (min === Infinity) break;
+						for (let x = 0; x < len; x++) {
+							if (vertex[x].cost === min) {
+								for (let y = 0; y < len; y++) {
+									let sum = costs[x][y] + min;
+									if (sum < vertex[y].cost) {
+										vertex[y].cost = sum;
+										vertex[y].next = x;
+									}
+								}
+								vertex[x].visited = true;
+							}
+						}
+					}
+					let index = 0, path = [];
+					try {
+						while (index < len) {
+							path.push(words[index]);
+							index = vertex[index].next;
+						}
+					} catch(e) {
+						reject();
+					}
+					resolve(path.slice(1, path.length-1));
+				});
+			};
+		});
+	}
+}
 
 (function () {
-
-})
+	let buttons = document.getElementsByTagName('button');
+	let dicstatus = document.getElementById('dicstatus');
+	let form = document.forms[0];
+	let textarea = form[0];
+	let output = document.getElementById('output');
+	
+	// Saving Dictionary
+	buttons[0].onclick = () => {
+		buttons[0].className = 'active';
+		buttons[0].disabled = true;
+		buttons[1].disabled = true;
+		buttons[2].disabled = true;
+		dicstatus.value = '辞書を読み込んでいます';
+		const WORKER = new Worker('setdic.js');
+		WORKER.onmessage = e => {
+			WORKER.onmessage = e => {
+				WORKER.terminate();
+				buttons[0].className = '';
+				buttons[0].disabled = false;
+				buttons[1].disabled = false;
+				buttons[2].disabled = false;
+				dicstatus.value = '辞書の読み込みが完了しました';
+			};
+		};
+		WORKER.onerror = e => {
+			WORKER.terminate();
+			buttons[0].className = '';
+			buttons[0].disabled = false;
+			buttons[1].disabled = false;
+			buttons[2].disabled = false;
+			dicstatus.value = 'エラーが発生しました';
+		};
+		WORKER.postMessage(DIC_NAME);
+	};
+	
+	// Deleting Dictionary
+	buttons[1].onclick = () => {
+		buttons[0].disabled = true;
+		buttons[1].className = 'active';
+		buttons[1].disabled = true;
+		buttons[2].disabled = true;
+		dicstatus.value = '辞書を削除しています';
+		let req = indexedDB.deleteDatabase(DIC_NAME);
+		req.onsuccess = () => {
+			buttons[0].disabled = false;
+			buttons[1].className = '';
+			buttons[1].disabled = false;
+			buttons[2].disabled = false;
+			dicstatus.value = '辞書を削除しました';
+		};
+	};
+	
+	// Analyzing
+	form.onsubmit = () => {
+		buttons[0].disabled = true;
+		buttons[1].disabled = true;
+		buttons[2].className = 'active';
+		buttons[2].disabled = true;
+		dicstatus.value = '解析中です';
+		let outputText = '';
+		let inputs = textarea.value.split(/(.*。)/);
+		let lattices = [];
+		for (let i = 0; i < inputs.length; i++) {
+			if (inputs[i]) lattices.push(new Lattice(inputs[i]));
+		}
+		let promises = lattices.map(lattice => new Promise((resolve, reject) => {
+			lattice.lookup()
+				.then(() => lattice.dijkstra())
+				.then(v => resolve(v));
+		}));
+		Promise.all(promises).then(values => {
+			for (let i = 0; i < values.length; i++) {
+				for (let j = 0; j < values[i].length; j++) {
+					let word = values[i][j];
+					outputText += '<tr>'
+						+ '<th>' + word.word
+						+ '<td>' + POSID[word.pos].join('-')
+						+ '<td>' + (word.cjg || []).join('-')
+						+ '<td>' + (word.base || word.word)
+						+ '<td>' + (word.orth || word.word)
+						+ '<td>' + (word.pron || word.orth || word.word);
+				}
+			}
+			output.innerHTML = outputText;
+			dicstatus.value = '解析が終了しました';
+		}, () => {
+			dicstatus.value = '解析中にエラーが発生しました';
+		});
+		buttons[0].disabled = false;
+		buttons[1].disabled = false;
+		buttons[2].className = '';
+		buttons[2].disabled = false;
+		return false;
+	};
+})();
