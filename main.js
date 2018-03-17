@@ -236,7 +236,6 @@ class Lattice {
 					while (index < len) {
 						let word = words[index];
 						if (!word) throw new Error();
-						word.pos = word.pos && POSID[word.pos];
 						path.push(word);
 						index = vertex[index].next;
 					}
@@ -348,7 +347,7 @@ class Lattice {
 					let word = values[i][j];
 					outputHTML += '<tr>'
 						+ '<th>' + word.word
-						+ '<td>' + (word.pos || []).join('-')
+						+ '<td>' + POSID[word.pos].join('-')
 						+ '<td>' + (word.cjg || []).join('-')
 						+ '<td>' + (word.base || word.cjg && word.word || '')
 						+ '<td>' + (word.orth || word.word)
