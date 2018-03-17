@@ -2,9 +2,14 @@ body {
 	text-align: center;
 	font-size: 90%;
 	line-height: 1.6;
+	padding: 1em;
 }
-:lang(en) {
-	font-style: italic;
+.centered > span {
+	display: block;
+	word-break: keep-all;
+}
+cite {
+	white-space: nowrap;
 }
 main, table {
 	margin: 1em auto;
@@ -48,6 +53,9 @@ form {
 }
 textarea {
 	flex: 1 1 40em;
+}
+tr:nth-of-type(2n) {
+	background-color: #eee;
 }
 th:not(:empty) {
 	background-color: #ddd;

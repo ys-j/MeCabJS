@@ -1,5 +1,4 @@
 const DIC_NAME = 'naist-jdic';
-const COST_CORRECTION = 10000; // min_cost: -8456;
 const POSID = [
 	['その他', '間投'], // 0
 	['フィラー'], // 1
@@ -71,6 +70,19 @@ const POSID = [
 	['名詞', '副詞可能'], // 67
 	['連体詞'], // 68
 ];
+const UNKNOWN_DEFINITION = [
+	{ name: 'DEFAULT', invoke: false }, // 0
+	{ name: 'SPACE', invoke: true, regexp: /^\s+$/ }, // 1
+	{ name: 'KANJI', invoke: false, regexp: /^[⺀-⻳⼀-⿕々〇㐀-䶵一-龥豈-鶴侮-頻]{1,2}$/ }, // 2
+	{ name: 'SYMBOL', invoke: true, regexp: /^[!-\/:-@\[-`\{-~¡-¿À-ȶḀ-ỹ！-／：-＠［-｀｛-･￠-\uffef\u2000-\u206f₠-⅏←-⥿⨀-\u2bff\u3000-\u303f㈀-㏿︰-﹫]+$/ }, // 3
+	{ name: 'NUMERIC', invoke: true, regexp: /^[0-9０-９⁰-\u209f⅐-\u218f]+$/ }, // 4
+	{ name: 'ALPHA', invoke: true, regexp: /^[A-Za-zＡ-Ｚａ-ｚ]+$/ }, // 5
+	{ name: 'HIRAGANA', invoke: false, regexp: /^[ぁ-ゟー]+$/ }, // 6
+	{ name: 'KATAKANA', invoke: true, regexp: /^[ァ-ヿㇰ-ㇿｦ-ﾝﾞﾟ]+$/ }, // 7
+	{ name: 'KANJINUMERIC', invoke: true, regexp: /^[〇一二三四五六七八九十百千万億兆京]+$/ }, // 8
+	{ name: 'GREEK', invoke: true, regexp: /^[ʹ-ϻ]+$/ }, // 9
+	{ name: 'CYRILLIC', invoke: true, regexp: /^[Ѐ-ӹԀ-ԏ]+$/ }, // 10
+];
 const BOS = {
 	word: '\x02',
 	id: 0,
@@ -85,23 +97,32 @@ const EOS = {
 };
 
 class Path extends Array {
-	constructor(array) {
+	constructor(length) {
 		super();
-		let len = array.length;
-		for (let i = 0; i < len; i++) this[i] = array[i];
-		this.length = len;
+		this.length = length || 0;
 		this.cost = 0;
 	}
-	last() {
-		return this[this.length - 1];
+	format() {
+		let costs = this.costs;
+		let cost = this.cost;
+		let newPath = Path.from(this.slice(1, this.length-1));
+		newPath.costs = costs;
+		newPath.cost = cost;
+		return newPath;
 	}
 }
+Path.from = arraylike => {
+	let length = arraylike.length;
+	let path = new Path(length)
+	for (let i = 0; i < length; i++) path[i] = arraylike[i];
+	return path;
+};
 
 class Lattice {
 	constructor(input) {
 		this.input = [...input];
 	}
-	lookup() {
+	lookup(unkDic) {
 		let chars = this.input;
 		const CHAR_LENGTH = chars.length;
 		return new Promise((resolve, reject) => {
@@ -121,6 +142,22 @@ class Lattice {
 									targets.push(cursor.value);
 									cursor.continue();
 								} else {
+									for (let k = 0; k < unkDic.length; k++) {
+										if (unkDic[k].regexp.test(targetKey)) {
+											targets.push({
+												word: targetKey,
+												id: unkDic[k].id,
+												cost: unkDic[k].cost,
+												pos: unkDic[k].pos,
+												start: i + 1,
+												end: j + 2,
+												note: k && '未知語'
+													|| targetKey === '\n' && '改行'
+													|| targetKey === '\t' && 'タブ'
+													|| '空白'
+											});
+										}
+									}
 									resolve();
 								}
 							}
@@ -128,10 +165,10 @@ class Lattice {
 					}
 				}
 				Promise.all(promises).then(() => {
-					targets.push(Object.assign({}, BOS), Object.assign({
+					targets.push(Object.assign({}, BOS), Object.assign({}, EOS, {
 						start: CHAR_LENGTH + 1,
 						end: CHAR_LENGTH + 2,
-					}, EOS));
+					}));
 					this.words = targets.sort((a, b) => {
 						return a.start - b.start || a.end - b.end;
 					});
@@ -140,10 +177,10 @@ class Lattice {
 			};
 		});
 	}
-	dijkstra() {
+	tokenize() {
 		let words = this.words;
 		let len = words.length;
-		let costs = new Array(len).fill().map(() => new Array(len));
+		let mCosts = new Array(len).fill().map(() => new Array(len));
 		return new Promise((resolve, reject) => {
 			let promises = [];
 			indexedDB.open(DIC_NAME).onsuccess = e => {
@@ -151,15 +188,15 @@ class Lattice {
 				let matrix = db.transaction(['matrix'], 'readonly').objectStore('matrix');
 				for (let x = 0; x < len; x++) {
 					for (let y = 0; y < len; y++) {
-						if (words[x].start === words[y].end) {
+						if (words[x].end === words[y].start) {
 							promises.push(new Promise((resolve, reject) => {
 								matrix.get([words[x].id, words[y].id]).onsuccess = e => {
-									costs[x][y] = e.target.result.cost + words[y].cost + COST_CORRECTION * 2;
+									mCosts[y][x] = e.target.result.cost;
 									resolve();
 								};
 							}));
 						} else {
-							costs[x][y] = Infinity;
+							mCosts[y][x] = Infinity;
 						}
 					}
 				}
@@ -174,42 +211,63 @@ class Lattice {
 						next: len,
 						visited: false,
 					};
+					search:
 					while (true) {
 						let min = Infinity;
 						for (let i = 0; i < len; i++) {
 							if (!vertex[i].visited && vertex[i].cost < min) min = vertex[i].cost;
 						}
 						if (min === Infinity) break;
-						for (let x = 0; x < len; x++) {
-							if (vertex[x].cost === min) {
-								for (let y = 0; y < len; y++) {
-									let sum = costs[x][y] + min;
-									if (sum < vertex[y].cost) {
-										vertex[y].cost = sum;
-										vertex[y].next = x;
+						for (let y = 0; y < len; y++) {
+							if (vertex[y].cost === min) {
+								for (let x = 0; x < len; x++) {
+									let sum = mCosts[y][x] + words[y].cost + min;
+									if (sum < vertex[x].cost) {
+										vertex[x].cost = sum;
+										vertex[x].next = y;
 									}
 								}
-								vertex[x].visited = true;
+								vertex[y].visited = true;
 							}
 						}
 					}
-					let index = 0, path = [];
-					try {
-						while (index < len) {
-							path.push(words[index]);
-							index = vertex[index].next;
-						}
-					} catch(e) {
-						reject();
+					let index = 0, path = new Path();
+					path.cost = vertex[index].cost;
+					while (index < len) {
+						let word = words[index];
+						if (!word) throw new Error();
+						word.pos = word.pos && POSID[word.pos];
+						path.push(word);
+						index = vertex[index].next;
 					}
-					resolve(path.slice(1, path.length-1));
-				});
+					resolve(path.format());
+				}).catch(() => reject());
 			};
 		});
 	}
 }
 
 (function () {
+	/*
+		Setting Unknown Word Dictionary
+	*/
+	let unkDicAll, unkDicNormal;
+	fetch(DIC_NAME + '.unknown.bin').then(res => res.arrayBuffer()).then(buf => {
+		let array = new Uint16Array(buf);
+		unkDicAll = new Array(array.length / 4);
+		for (let i = 0; i < unkDicAll.length; i++) {
+			unkDicAll[i] = Object.assign({}, UNKNOWN_DEFINITION[array[i*4+0]], {
+				id: array[i*4+1],
+				cost: array[i*4+2],
+				pos: array[i*4+3],
+			});
+		}
+		unkDicNormal = unkDicAll.filter(v => v.invoke);
+	});
+
+	/*
+		DOM
+	*/
 	let buttons = document.getElementsByTagName('button');
 	let dicstatus = document.getElementById('dicstatus');
 	let form = document.forms[0];
@@ -262,46 +320,52 @@ class Lattice {
 		};
 	};
 	
-	// Analyzing
+	// Tokenization
 	form.onsubmit = () => {
 		buttons[0].disabled = true;
 		buttons[1].disabled = true;
 		buttons[2].className = 'active';
 		buttons[2].disabled = true;
 		dicstatus.value = '解析中です';
-		let outputText = '';
-		let inputs = textarea.value.split(/(.*。)/);
+		let outputHTML = '';
+		let inputs = textarea.value.split(/(.*?。)\s*/);
 		let lattices = [];
 		for (let i = 0; i < inputs.length; i++) {
 			if (inputs[i]) lattices.push(new Lattice(inputs[i]));
 		}
 		let promises = lattices.map(lattice => new Promise((resolve, reject) => {
-			lattice.lookup()
-				.then(() => lattice.dijkstra())
-				.then(v => resolve(v));
+			lattice.lookup(unkDicNormal || [])
+				.then(() => lattice.tokenize())
+				.then(v => resolve(v))
+				.catch(() => lattice.lookup(unkDicAll || []))
+				.then(() => lattice.tokenize())
+				.then(v => resolve(v))
+				.catch(() => reject());
 		}));
 		Promise.all(promises).then(values => {
 			for (let i = 0; i < values.length; i++) {
 				for (let j = 0; j < values[i].length; j++) {
 					let word = values[i][j];
-					outputText += '<tr>'
+					outputHTML += '<tr>'
 						+ '<th>' + word.word
-						+ '<td>' + POSID[word.pos].join('-')
+						+ '<td>' + (word.pos || []).join('-')
 						+ '<td>' + (word.cjg || []).join('-')
-						+ '<td>' + (word.base || word.word)
+						+ '<td>' + (word.base || word.cjg && word.word || '')
 						+ '<td>' + (word.orth || word.word)
-						+ '<td>' + (word.pron || word.orth || word.word);
+						+ '<td>' + (word.pron || word.orth || word.word)
+						+ '<td>' + (word.note || '');
 				}
 			}
-			output.innerHTML = outputText;
+			output.innerHTML = outputHTML;
 			dicstatus.value = '解析が終了しました';
-		}, () => {
+		}, e => {
 			dicstatus.value = '解析中にエラーが発生しました';
+		}).then(() => {
+			buttons[0].disabled = false;
+			buttons[1].disabled = false;
+			buttons[2].className = '';
+			buttons[2].disabled = false;
 		});
-		buttons[0].disabled = false;
-		buttons[1].disabled = false;
-		buttons[2].className = '';
-		buttons[2].disabled = false;
 		return false;
 	};
 })();

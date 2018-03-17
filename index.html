@@ -6,20 +6,18 @@
 		<link rel=stylesheet href=style.css>
 	</head>
 	<body>
-		<h1>MeCabJS (test)</h1>
-		<p>
-			“MeCab用NAIST日本語辞書” (<a href=https://ja.osdn.net/projects/naist-jdic/ lang=en>NAIST Japanese Dictionary</a>) を IndexedDB に保存し、 JavaScript で形態素解析をするナニカです。
-			<br>
-			<a href=https://taku910.github.io/mecab/>MeCab</a> のバインディングではありませんので、おかしいところが多々あります。
-			<br>
-			辞書の保存にはCPUとメモリを総動員しますので、マシンパワーによっては3分以上かかることもあります。カップ麺でも作りながらお待ちください。
+		<h1>MeCab on JavaScript</h1>
+		<p class=centered>
+			<span>“MeCab用NAIST日本語辞書” (<a href=https://ja.osdn.net/projects/naist-jdic/wiki/><cite>NAIST Japanese Dictionary</cite></a>) をIndexedDBに保存し、<wbr>JavaScriptで形態素解析をするナニカです。</span>
+			<span><a href=https://taku910.github.io/mecab/>MeCab</a>のバインディングではありませんので、<wbr>おかしいところが多々あります。</span>
+			<span>辞書の保存にはCPUとメモリを総動員しますので、<wbr>マシンパワーによっては3分以上かかることもあります。<wbr>カップ麺でも作りながらお待ちください。</span>
 		</p>
 		<main>
-			<section id=settings>
+			<div>
 				<button>辞書を保存する</button>
 				<button>辞書を削除する</button>
 				<input id=dicstatus size=40 readonly>
-			</section>
+			</div>
 			<form>
 				<textarea placeholder=ここに解析したい文章を入力してください></textarea>
 				<button type=submit>解析</button>
@@ -27,12 +25,15 @@
 			<table>
 				<caption>解析結果
 				<thead>
-					<tr><th><th>品詞<th>活用<th>基本形<th>読み<th>発音
+					<tr><th><th>品詞<th>活用<th>基本形<th>読み<th>発音<th>備考
 				<tbody id=output>
 			</table>
 		</main>
 		<footer>
-			<small>辞書は</small>
+			<small class=centered>
+				<span>本ページで使用している辞書は、<wbr><b>奈良先端科学技術大学院大学</b>の著作物である <cite>NAIST Japanese Dictionary</cite> を一部改変したものです。</span>
+				<span>辞書には<a href=naist-jdic.copying.txt>修正BSDライセンス</a>が適用されます。</span>
+			</small>
 		</footer>
 		<script src=gunzip.min.js></script>
 		<script src=main.js></script>
