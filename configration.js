@@ -620,7 +620,7 @@ const CONTEXT_TYPE = {
 					regexp: unknown.regexp.value,
 				};
 				localStorage.setItem(UNKNOWN_DEFINITION_NAME, JSON.stringify(UNKNOWN_DEFINITION));
-				if (confirm('未知語処理を変更しました\n変更を反映するにページを更新しますか？')) location.reload();
+				if (confirm('未知語処理を変更しました\n変更を反映するためにページを更新しますか？')) location.reload();
 			}
 		} else {
 			alert(unknown.kind.options[index].text + 'は変更できません');
