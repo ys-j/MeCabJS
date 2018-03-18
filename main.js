@@ -78,7 +78,7 @@ const UNKNOWN_DEFINITION = JSON.parse(localStorage.getItem(UNKNOWN_DEFINITION_NA
 	{ name: 'SYMBOL', invoke: true, regexp: '^[!-\/:-@\[-`\{-~¡-¿À-ȶḀ-ỹ！-／：-＠［-｀｛-･￠-\uffef\u2000-\u206f₠-⅏←-⥿⨀-\u2bff\u3000-\u303f㈀-㏿︰-﹫]+$' }, // 3
 	{ name: 'NUMERIC', invoke: true, regexp: '^[0-9０-９⁰-\u209f⅐-\u218f]+$' }, // 4
 	{ name: 'ALPHA', invoke: true, regexp: '^[A-Za-zＡ-Ｚａ-ｚ]+$' }, // 5
-	{ name: 'HIRAGANA', invoke: false, regexp: '^[ぁ-ゟー]+$' }, // 6
+	{ name: 'HIRAGANA', invoke: false, regexp: '^[ぁ-ゟー]{1,4}$' }, // 6
 	{ name: 'KATAKANA', invoke: true, regexp: '^[ァ-ヿㇰ-ㇿｦ-ﾝﾞﾟ]+$' }, // 7
 	{ name: 'KANJINUMERIC', invoke: true, regexp: '^[〇一二三四五六七八九十百千万億兆京]+$' }, // 8
 	{ name: 'GREEK', invoke: true, regexp: '^[ʹ-ϻ]+$' }, // 9
