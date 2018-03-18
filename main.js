@@ -70,18 +70,19 @@ const POSID = [
 	['名詞', '副詞可能'], // 67
 	['連体詞'], // 68
 ];
-const UNKNOWN_DEFINITION = [
-	{ name: 'DEFAULT', invoke: false }, // 0
-	{ name: 'SPACE', invoke: true, regexp: /^\s+$/ }, // 1
-	{ name: 'KANJI', invoke: false, regexp: /^[⺀-⻳⼀-⿕々〇㐀-䶵一-龥豈-鶴侮-頻]{1,2}$/ }, // 2
-	{ name: 'SYMBOL', invoke: true, regexp: /^[!-\/:-@\[-`\{-~¡-¿À-ȶḀ-ỹ！-／：-＠［-｀｛-･￠-\uffef\u2000-\u206f₠-⅏←-⥿⨀-\u2bff\u3000-\u303f㈀-㏿︰-﹫]+$/ }, // 3
-	{ name: 'NUMERIC', invoke: true, regexp: /^[0-9０-９⁰-\u209f⅐-\u218f]+$/ }, // 4
-	{ name: 'ALPHA', invoke: true, regexp: /^[A-Za-zＡ-Ｚａ-ｚ]+$/ }, // 5
-	{ name: 'HIRAGANA', invoke: false, regexp: /^[ぁ-ゟー]+$/ }, // 6
-	{ name: 'KATAKANA', invoke: true, regexp: /^[ァ-ヿㇰ-ㇿｦ-ﾝﾞﾟ]+$/ }, // 7
-	{ name: 'KANJINUMERIC', invoke: true, regexp: /^[〇一二三四五六七八九十百千万億兆京]+$/ }, // 8
-	{ name: 'GREEK', invoke: true, regexp: /^[ʹ-ϻ]+$/ }, // 9
-	{ name: 'CYRILLIC', invoke: true, regexp: /^[Ѐ-ӹԀ-ԏ]+$/ }, // 10
+const UNKNOWN_DEFINITION_NAME = 'UNKNOWN_DEFINITION';
+const UNKNOWN_DEFINITION = JSON.parse(localStorage.getItem(UNKNOWN_DEFINITION_NAME) || null) || [
+	{ name: 'DEFAULT', invoke: false, regexp: '^$' }, // 0
+	{ name: 'SPACE', invoke: true, regexp: '^\s+$' }, // 1
+	{ name: 'KANJI', invoke: false, regexp: '^[⺀-⻳⼀-⿕々〇㐀-䶵一-龥豈-鶴侮-頻]{1,2}$' }, // 2
+	{ name: 'SYMBOL', invoke: true, regexp: '^[!-\/:-@\[-`\{-~¡-¿À-ȶḀ-ỹ！-／：-＠［-｀｛-･￠-\uffef\u2000-\u206f₠-⅏←-⥿⨀-\u2bff\u3000-\u303f㈀-㏿︰-﹫]+$' }, // 3
+	{ name: 'NUMERIC', invoke: true, regexp: '^[0-9０-９⁰-\u209f⅐-\u218f]+$' }, // 4
+	{ name: 'ALPHA', invoke: true, regexp: '^[A-Za-zＡ-Ｚａ-ｚ]+$' }, // 5
+	{ name: 'HIRAGANA', invoke: false, regexp: '^[ぁ-ゟー]+$' }, // 6
+	{ name: 'KATAKANA', invoke: true, regexp: '^[ァ-ヿㇰ-ㇿｦ-ﾝﾞﾟ]+$' }, // 7
+	{ name: 'KANJINUMERIC', invoke: true, regexp: '^[〇一二三四五六七八九十百千万億兆京]+$' }, // 8
+	{ name: 'GREEK', invoke: true, regexp: '^[ʹ-ϻ]+$' }, // 9
+	{ name: 'CYRILLIC', invoke: true, regexp: '^[Ѐ-ӹԀ-ԏ]+$' }, // 10
 ];
 const BOS = {
 	word: '\x02',
@@ -96,6 +97,20 @@ const EOS = {
 	cost: 0,
 };
 
+const MESSAGE = {
+	DELETING_DIC: '辞書を削除しています',
+	DONE_DELETING: '辞書を削除しました',
+	DONE_LOADING: '辞書の読み込みが完了しました',
+	DONE_PARSING: '解析が終了しました',
+	DOWNLOADING: '辞書をダウンロードしています',
+	ERROR: 'エラーが発生しました',
+	LOADING_MTX: '品詞連接情報を読み込んでいます',
+	LOADING_DIC: '辞書を読み込んでいます：残り',
+	NOT_FOUND_DIC: '辞書が見つかりません',
+	NOT_FOUND_WORD: '単語が見つかりません',
+	PARSING: '解析中です',
+};
+
 class Path extends Array {
 	constructor(length) {
 		super();
@@ -103,10 +118,8 @@ class Path extends Array {
 		this.cost = 0;
 	}
 	format() {
-		let costs = this.costs;
 		let cost = this.cost;
 		let newPath = Path.from(this.slice(1, this.length-1));
-		newPath.costs = costs;
 		newPath.cost = cost;
 		return newPath;
 	}
@@ -118,6 +131,8 @@ Path.from = arraylike => {
 	return path;
 };
 
+let mtx = [];
+
 class Lattice {
 	constructor(input) {
 		this.input = [...input];
@@ -127,14 +142,21 @@ class Lattice {
 		const CHAR_LENGTH = chars.length;
 		return new Promise((resolve, reject) => {
 			indexedDB.open(DIC_NAME).onsuccess = e => {
-				let db = e.target.result;
-				let dic = db.transaction(['dictionary'], 'readonly').objectStore('dictionary').index('index');
+				let db = e.target.result, dic;
+				try {
+					dic = db.transaction(['dictionary'], 'readonly').objectStore('dictionary').index('index');
+				} catch(e) {
+					db.close();
+					indexedDB.deleteDatabase(DIC_NAME);
+					reject(MESSAGE.NOT_FOUND_DIC);
+				}
 				let targets = [], promises = [];
 				for (let i = 0; i < CHAR_LENGTH; i++) {
 					for (let j = i; j < CHAR_LENGTH; j++) {
 						promises.push(new Promise((resolve, reject) => {
 							let targetKey = chars.slice(i, j+1).join('');
-							dic.openCursor(targetKey).onsuccess = e => {
+							let req = dic.openCursor(targetKey);
+							req.onsuccess = e => {
 								let cursor = e.target.result;
 								if (cursor) {
 									cursor.value.start = i + 1;
@@ -142,8 +164,9 @@ class Lattice {
 									targets.push(cursor.value);
 									cursor.continue();
 								} else {
-									for (let k = 0; k < unkDic.length; k++) {
-										if (unkDic[k].regexp.test(targetKey)) {
+									// Skip DEFAULT (k=0)
+									for (let k = 1; k < unkDic.length; k++) {
+										if (new RegExp(unkDic[k].regexp).test(targetKey)) {
 											targets.push({
 												word: targetKey,
 												id: unkDic[k].id,
@@ -160,7 +183,8 @@ class Lattice {
 									}
 									resolve();
 								}
-							}
+							};
+							req.onerror = e => reject(e);
 						}));
 					}
 				}
@@ -173,7 +197,7 @@ class Lattice {
 						return a.start - b.start || a.end - b.end;
 					});
 					resolve(this.words);
-				}, reject);
+				}, reject).then(() => db.close());
 			};
 		});
 	}
@@ -186,19 +210,25 @@ class Lattice {
 			indexedDB.open(DIC_NAME).onsuccess = e => {
 				let db = e.target.result;
 				let matrix = db.transaction(['matrix'], 'readonly').objectStore('matrix');
-				for (let x = 0; x < len; x++) {
-					for (let y = 0; y < len; y++) {
-						if (words[x].end === words[y].start) {
-							promises.push(new Promise((resolve, reject) => {
-								matrix.get([words[x].id, words[y].id]).onsuccess = e => {
-									mCosts[y][x] = e.target.result.cost;
-									resolve();
-								};
-							}));
+				for (let y = 0; y < len; y++) {
+					let rightId = words[y].id;
+					promises.push(new Promise((resolve, reject) => {
+						if (mtx[rightId]) {
+							resolve();
 						} else {
-							mCosts[y][x] = Infinity;
+							let req = matrix.get(rightId);
+							req.onsuccess = e => {
+								mtx[rightId] = e.target.result.left;
+								resolve();
+							};
+							req.onerror = e => reject(e);
 						}
-					}
+					}).then(() => {
+						for (let x = 0; x < len; x++) {
+							let leftId = words[x].id;
+							mCosts[y][x] = words[x].end === words[y].start ? mtx[rightId][leftId] : Infinity;
+						}
+					}));
 				}
 				Promise.all(promises).then(() => {
 					let vertex = new Array(len).fill().map(() => ({
@@ -211,7 +241,6 @@ class Lattice {
 						next: len,
 						visited: false,
 					};
-					search:
 					while (true) {
 						let min = Infinity;
 						for (let i = 0; i < len; i++) {
@@ -235,12 +264,16 @@ class Lattice {
 					path.cost = vertex[index].cost;
 					while (index < len) {
 						let word = words[index];
-						if (!word) throw new Error();
-						path.push(word);
-						index = vertex[index].next;
+						if (word) {
+							path.push(word);
+							index = vertex[index].next;
+						} else {
+							reject(MESSAGE.NOT_FOUND_WORD);
+							break;
+						}
 					}
 					resolve(path.format());
-				}).catch(() => reject());
+				}).catch(e => reject(e));
 			};
 		});
 	}
@@ -268,10 +301,12 @@ class Lattice {
 		DOM
 	*/
 	let buttons = document.getElementsByTagName('button');
-	let dicstatus = document.getElementById('dicstatus');
-	let form = document.forms[0];
+	// buttons = [save, delate, config, main]
+	let dicstatus = document.getElementById('status');
+	let form = document.forms.main;
 	let textarea = form[0];
 	let output = document.getElementById('output');
+	let overlay = document.getElementById('overlay');
 	
 	// Saving Dictionary
 	buttons[0].onclick = () => {
@@ -279,17 +314,28 @@ class Lattice {
 		buttons[0].disabled = true;
 		buttons[1].disabled = true;
 		buttons[2].disabled = true;
-		dicstatus.value = '辞書を読み込んでいます';
-		const WORKER = new Worker('setdic.js');
+		buttons[3].disabled = true;
+		dicstatus.value = MESSAGE.DOWNLOADING;
+
+		const WORKER = new Worker('initialize.js');
 		WORKER.onmessage = e => {
-			WORKER.onmessage = e => {
+			const REST = e.data.rest;
+			if (REST) {
+				if (REST === Infinity) {
+					dicstatus.value = MESSAGE.LOADING_MTX;
+				} else {
+					dicstatus.value = MESSAGE.LOADING_DIC + REST;
+				}
+			} else {
 				WORKER.terminate();
 				buttons[0].className = '';
 				buttons[0].disabled = false;
 				buttons[1].disabled = false;
 				buttons[2].disabled = false;
-				dicstatus.value = '辞書の読み込みが完了しました';
-			};
+				buttons[3].disabled = false;
+				dicstatus.value = MESSAGE.DONE_LOADING;
+				if (e.data.error) dicstatus.value += '（エラー：' + e.data.error.length + '語未登録）';
+			}
 		};
 		WORKER.onerror = e => {
 			WORKER.terminate();
@@ -297,7 +343,8 @@ class Lattice {
 			buttons[0].disabled = false;
 			buttons[1].disabled = false;
 			buttons[2].disabled = false;
-			dicstatus.value = 'エラーが発生しました';
+			buttons[3].disabled = false;
+			dicstatus.value = MESSAGE.ERROR;
 		};
 		WORKER.postMessage(DIC_NAME);
 	};
@@ -308,24 +355,36 @@ class Lattice {
 		buttons[1].className = 'active';
 		buttons[1].disabled = true;
 		buttons[2].disabled = true;
-		dicstatus.value = '辞書を削除しています';
+		buttons[3].disabled = true;
+		dicstatus.value = MESSAGE.DELETING_DIC;
+		localStorage.removeItem(UNKNOWN_DEFINITION_NAME);
 		let req = indexedDB.deleteDatabase(DIC_NAME);
 		req.onsuccess = () => {
 			buttons[0].disabled = false;
 			buttons[1].className = '';
 			buttons[1].disabled = false;
 			buttons[2].disabled = false;
-			dicstatus.value = '辞書を削除しました';
+			buttons[3].disabled = false;
+			dicstatus.value = MESSAGE.DONE_DELETING;
 		};
+	};
+
+	// Configuration
+	buttons[2].onclick = e => {
+		let script = document.createElement('script');
+		script.src = 'configration.js';
+		document.body.appendChild(script);
+		e.target.onclick = null;
 	};
 	
 	// Tokenization
 	form.onsubmit = () => {
 		buttons[0].disabled = true;
 		buttons[1].disabled = true;
-		buttons[2].className = 'active';
 		buttons[2].disabled = true;
-		dicstatus.value = '解析中です';
+		buttons[3].className = 'active';
+		buttons[3].disabled = true;
+		dicstatus.value = MESSAGE.PARSING;
 		let outputHTML = '';
 		let inputs = textarea.value.split(/(.*?。)\s*/);
 		let lattices = [];
@@ -334,12 +393,11 @@ class Lattice {
 		}
 		let promises = lattices.map(lattice => new Promise((resolve, reject) => {
 			lattice.lookup(unkDicNormal || [])
+				.then(() => lattice.tokenize(), e => reject(e))
+				.then(v => resolve(v), () => lattice.lookup(unkDicAll || []))
 				.then(() => lattice.tokenize())
 				.then(v => resolve(v))
-				.catch(() => lattice.lookup(unkDicAll || []))
-				.then(() => lattice.tokenize())
-				.then(v => resolve(v))
-				.catch(() => reject());
+				.catch(e => reject(e));
 		}));
 		Promise.all(promises).then(values => {
 			for (let i = 0; i < values.length; i++) {
@@ -347,8 +405,8 @@ class Lattice {
 					let word = values[i][j];
 					outputHTML += '<tr>'
 						+ '<th>' + word.word
-						+ '<td>' + POSID[word.pos].join('-')
-						+ '<td>' + (word.cjg || []).join('-')
+						+ '<td>' + POSID[word.pos].join(' - ')
+						+ '<td>' + (word.cjg || []).join(' - ')
 						+ '<td>' + (word.base || word.cjg && word.word || '')
 						+ '<td>' + (word.orth || word.word)
 						+ '<td>' + (word.pron || word.orth || word.word)
@@ -356,14 +414,16 @@ class Lattice {
 				}
 			}
 			output.innerHTML = outputHTML;
-			dicstatus.value = '解析が終了しました';
+			dicstatus.value = MESSAGE.DONE_PARSING;
 		}, e => {
-			dicstatus.value = '解析中にエラーが発生しました';
+			dicstatus.value = MESSAGE.ERROR;
+			if (e) dicstatus.value += '（' + e +  '）';
 		}).then(() => {
 			buttons[0].disabled = false;
 			buttons[1].disabled = false;
-			buttons[2].className = '';
 			buttons[2].disabled = false;
+			buttons[3].className = '';
+			buttons[3].disabled = false;
 		});
 		return false;
 	};

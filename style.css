@@ -42,14 +42,14 @@ button[disabled] {
 	color: #fff;
 	border-color: #aaa;
 }
-#dicstatus {
+#status {
 	display: block;
 	margin: 1em auto;
+	text-align: center;
 }
 form {
 	display: flex;
 	justify-content: center;
-	align-items: center;
 }
 textarea {
 	flex: 1 1 40em;
@@ -64,4 +64,42 @@ footer {
 	margin: 1em auto;
 	padding: 1em 0;
 	border-top: thin solid #ddd;
+}
+#overlay {
+	position: fixed;
+	top: 0;
+	left: 0;
+	width: 100%;
+	height: 100%;
+	background-color: #ddd8;
+}
+#popup {
+	display: inline-flex;
+	justify-content: space-around;
+	flex-flow: row wrap;
+	margin: 5%;
+	padding: 1em;
+	border-radius: 1em;
+	background-color: #fff;
+}
+label {
+	display: block;
+	text-align: left;
+}
+label > span, label > div {
+	display: inline-block;
+	vertical-align: middle;
+}
+label > span {
+	min-width: 4em;
+	margin: .5em;
+}
+label > div > * {
+	display: none;
+}
+label > div > :required {
+	display: block;
+}
+#popup > button {
+	flex: 1 0 80%;
 }
