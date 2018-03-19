@@ -21,68 +21,80 @@ self.onmessage = e => {
 		let openReq = indexedDB.open(DIC_NAME);
 		openReq.onupgradeneeded = e => {
 			let db = e.target.result;
-			db.createObjectStore('dictionary', { autoIncrement: true }).createIndex('index', 'word');
 			db.createObjectStore('matrix', { keyPath: 'right' });
+			db.createObjectStore('dictionary', { autoIncrement: true }).createIndex('index', 'word');
 		};
 		openReq.onsuccess = e => {
 			let db = e.target.result;
-			let tx = db.transaction(['dictionary', 'matrix'], 'readwrite');
-
-			self.postMessage({ success: null, rest: Infinity });
-			// Matrix
+			let tx = db.transaction(['matrix', 'dictionary'], 'readwrite');
+			let errors = [];
 			new Promise((resolve, reject) => {
 				let matrix = tx.objectStore('matrix');
 				let bin = values[0];
 				const SizeX = bin[0] >>> 0, SizeY = bin[1] >>> 0;
-				for (let i = 0; i < SizeY; i++) {
-					let start = 2 + i * SizeY;
-					let putReq = matrix.put({
-						right: i,
-						left: [...bin.subarray(start, start + SizeX)],
-					});
-					if (i === SizeY - 1) putReq.onsuccess = () => resolve();
-				}
-			}).then(() => {
-				// Dictionary
+
 				let dictionary = tx.objectStore('dictionary');
 				let words = values[1];
 				const SizeWords = words.length;
-				let promises = new Array(SizeWords);
-	
-				for (let i = 0; i < SizeWords; i++) {
-					let c = words[i].split('\t');
-					let token = {
-						word: c[0],
-						id: Number(c[1]),
-						cost: Number(c[2]),
-						pos: Number(c[3]),
-					};
-					if (c[4]) token.cjg = [ c[4], c[5] ];
-					if (c[6]) token.base = c[6];
-					if (c[7]) token.orth = c[7];
-					if (c[8]) token.pron = c[8];
-		
+
+				const SumSize = SizeY + SizeWords;
+
+				let promises = new Array(SumSize);
+				self.postMessage({ state: 'waiting', rest: SumSize });
+				
+				for (let i = 0; i < SizeY; i++) {
 					promises[i] = new Promise((resolve, reject) => {
-						let req = dictionary.put(token);
+						let start = 2 + i * SizeY;
+						let req = matrix.put({
+							right: i,
+							left: [...bin.subarray(start, start + SizeX)],
+						});
 						req.onsuccess = e => {
-							self.postMessage({ success: i, rest: SizeWords-i-1 });
+							self.postMessage({ rest: SumSize - i - 1 });
 							resolve();
 						};
 						req.onerror = e => {
-							self.postMessage({ error: words[i], rest: SizeWords-i-1 });
-							reject(i);
+							errors.push('matrix' + i);
+							self.postMessage({ rest: SumSize - i - 1 });
+							resolve();
 						};
 					});
 				}
 
-				Promise.all(promises).then(() => {
-					self.postMessage({ success: null, rest: 0 });
-					self.close();
-				}, indexes => {
-					self.postMessage({ error: indexes, rest: 0 });
-					self.close();
-				});
+				for (let j = 0; j < SizeWords; j++) {
+					promises[SizeY + j] = new Promise((resolve, reject) => {
+						let c = words[j].split('\t');
+						let token = {
+							word: c[0],
+							id: Number(c[1]),
+							cost: Number(c[2]),
+							pos: Number(c[3]),
+						};
+						if (c[4]) token.cjg = [ c[4], c[5] ];
+						if (c[6]) token.base = c[6];
+						if (c[7]) token.orth = c[7];
+						if (c[8]) token.pron = c[8];
+						let req = dictionary.put(token);
+						req.onsuccess = e => {
+							self.postMessage({ rest: SizeWords - j - 1 });
+							resolve();
+						};
+						req.onerror = e => {
+							errors.push('dic' + j);
+							self.postMessage({ rest: SizeWords - j - 1 });
+							resolve();
+						};
+					});
+				}
+				return Promise.all(promises);
+			}).then(() => {
+				self.postMessage({ state: 'done', error: errors, rest: 0 });
+				self.close();
 			});
 		};
+		openReq.onerror = e => Promise.reject('データベースに接続できません');
+	}).catch(e => {
+		self.postMessage({ state: 'error', error: e, rest: 0 });
+		self.close();
 	});
 }

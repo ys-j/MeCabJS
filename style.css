@@ -4,7 +4,7 @@ body {
 	line-height: 1.6;
 	padding: 1em;
 }
-.centered > span {
+.centered > * {
 	display: block;
 	word-break: keep-all;
 }
@@ -45,6 +45,8 @@ button[disabled] {
 #status {
 	display: block;
 	margin: 1em auto;
+	max-width: 100%;
+	box-sizing: border-box;
 	text-align: center;
 }
 form {
@@ -71,6 +73,7 @@ footer {
 	left: 0;
 	width: 100%;
 	height: 100%;
+	overflow-y: scroll;
 	background-color: #ddd8;
 }
 #popup {
@@ -82,23 +85,51 @@ footer {
 	border-radius: 1em;
 	background-color: #fff;
 }
-label {
-	display: block;
+fieldset {
+	position: relative;
+	padding-bottom: 4em;
+}
+dl {
 	text-align: left;
 }
-label > span, label > div {
-	display: inline-block;
-	vertical-align: middle;
-}
-label > span {
+dt {
+	float: left;
+	margin: 0 .5em;
 	min-width: 4em;
+}
+dd {
+	display: inline;
+	margin: 0;
+}
+dd::after {
+	display: block;
+	content: '';
 	margin: .5em;
 }
-label > div > * {
+dd:first-of-type::after {
+	border-top: thin solid #ddd;
+}
+dd > div {
+	display: inline-block;
+}
+dd > div > * {
 	display: none;
 }
-label > div > :required {
+dd > div > :required {
 	display: block;
+}
+dt > div {
+	line-height: 3.2;
+}
+dd label::after {
+	display: block;
+	content: '';
+}
+fieldset > button {
+	position: absolute;
+	bottom: .5em;
+	left: 50%;
+	margin-left: -2em;
 }
 #popup > button {
 	flex: 1 0 80%;

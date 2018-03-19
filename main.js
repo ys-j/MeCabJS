@@ -104,11 +104,12 @@ const MESSAGE = {
 	DONE_PARSING: '解析が終了しました',
 	DOWNLOADING: '辞書をダウンロードしています',
 	ERROR: 'エラーが発生しました',
-	LOADING_MTX: '品詞連接情報を読み込んでいます',
 	LOADING_DIC: '辞書を読み込んでいます：残り',
 	NOT_FOUND_DIC: '辞書が見つかりません',
+	NOT_DOUND_MTX: '品詞連接情報が見つかりません',
 	NOT_FOUND_WORD: '単語が見つかりません',
 	PARSING: '解析中です',
+	WAITING_DB: 'データベースの受付を待機しています：残り',
 };
 
 class Path extends Array {
@@ -218,8 +219,13 @@ class Lattice {
 						} else {
 							let req = matrix.get(rightId);
 							req.onsuccess = e => {
-								mtx[rightId] = e.target.result.left;
-								resolve();
+								let result = e.target.result;
+								if (result) {
+									mtx[rightId] = e.target.result.left;
+									resolve();
+								} else {
+									reject(MESSAGE.NOT_DOUND_MTX);
+								}
 							};
 							req.onerror = e => reject(e);
 						}
@@ -302,7 +308,7 @@ class Lattice {
 	*/
 	let buttons = document.getElementsByTagName('button');
 	// buttons = [save, delate, config, main]
-	let dicstatus = document.getElementById('status');
+	let status = document.getElementById('status');
 	let form = document.forms.main;
 	let textarea = form[0];
 	let output = document.getElementById('output');
@@ -315,38 +321,38 @@ class Lattice {
 		buttons[1].disabled = true;
 		buttons[2].disabled = true;
 		buttons[3].disabled = true;
-		dicstatus.value = MESSAGE.DOWNLOADING;
+		status.value = MESSAGE.DOWNLOADING;
 
-		const WORKER = new Worker('initialize.js');
-		WORKER.onmessage = e => {
+		let worker = new Worker('initialize.js');
+		worker.onmessage = e => {
+			const STATE = e.data.state;
 			const REST = e.data.rest;
-			if (REST) {
-				if (REST === Infinity) {
-					dicstatus.value = MESSAGE.LOADING_MTX;
-				} else {
-					dicstatus.value = MESSAGE.LOADING_DIC + REST;
-				}
+			if (STATE === 'waiting' && REST) {
+				status.value = MESSAGE.WAITING_DB + REST;
+			} else if (REST) {
+				status.value = MESSAGE.LOADING_DIC + REST;
 			} else {
-				WORKER.terminate();
+				worker.terminate();
 				buttons[0].className = '';
 				buttons[0].disabled = false;
 				buttons[1].disabled = false;
 				buttons[2].disabled = false;
 				buttons[3].disabled = false;
-				dicstatus.value = MESSAGE.DONE_LOADING;
-				if (e.data.error) dicstatus.value += '（エラー：' + e.data.error.length + '語未登録）';
+				status.value = MESSAGE.DONE_LOADING;
+				const ERROR = e.data.error;
+				if (ERROR && ERROR.length) status.value += '（エラー：' + ERROR.length + '語未登録）';
 			}
 		};
-		WORKER.onerror = e => {
-			WORKER.terminate();
+		worker.onerror = e => {
+			worker.terminate();
 			buttons[0].className = '';
 			buttons[0].disabled = false;
 			buttons[1].disabled = false;
 			buttons[2].disabled = false;
 			buttons[3].disabled = false;
-			dicstatus.value = MESSAGE.ERROR;
+			status.value = MESSAGE.ERROR;
 		};
-		WORKER.postMessage(DIC_NAME);
+		worker.postMessage(DIC_NAME);
 	};
 	
 	// Deleting Dictionary
@@ -356,7 +362,7 @@ class Lattice {
 		buttons[1].disabled = true;
 		buttons[2].disabled = true;
 		buttons[3].disabled = true;
-		dicstatus.value = MESSAGE.DELETING_DIC;
+		status.value = MESSAGE.DELETING_DIC;
 		localStorage.removeItem(UNKNOWN_DEFINITION_NAME);
 		let req = indexedDB.deleteDatabase(DIC_NAME);
 		req.onsuccess = () => {
@@ -365,7 +371,7 @@ class Lattice {
 			buttons[1].disabled = false;
 			buttons[2].disabled = false;
 			buttons[3].disabled = false;
-			dicstatus.value = MESSAGE.DONE_DELETING;
+			status.value = MESSAGE.DONE_DELETING;
 		};
 	};
 
@@ -384,7 +390,7 @@ class Lattice {
 		buttons[2].disabled = true;
 		buttons[3].className = 'active';
 		buttons[3].disabled = true;
-		dicstatus.value = MESSAGE.PARSING;
+		status.value = MESSAGE.PARSING;
 		let outputHTML = '';
 		let inputs = textarea.value.split(/(.*?。)\s*/);
 		let lattices = [];
@@ -414,10 +420,10 @@ class Lattice {
 				}
 			}
 			output.innerHTML = outputHTML;
-			dicstatus.value = MESSAGE.DONE_PARSING;
+			status.value = MESSAGE.DONE_PARSING;
 		}, e => {
-			dicstatus.value = MESSAGE.ERROR;
-			if (e) dicstatus.value += '（' + e +  '）';
+			status.value = MESSAGE.ERROR;
+			if (e) status.value += '（' + e +  '）';
 		}).then(() => {
 			buttons[0].disabled = false;
 			buttons[1].disabled = false;
@@ -427,4 +433,10 @@ class Lattice {
 		});
 		return false;
 	};
+
+	// Warning for not Firefox users
+	if (!/firefox/i.test(navigator.userAgent)) {
+		let strong = document.getElementById('ua-warning');
+		strong.style.color = '#c00';
+	}
 })();

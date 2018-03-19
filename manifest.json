@@ -1,0 +1,10 @@
+{
+    "name": "MeCab on JavaScript",
+    "short_name": "MeCabJS",
+    "lang": "ja-JP",
+    "start_url": ".",
+    "display": "standalone",
+    "thema_color": "#327fc7",
+    "background_color": "#fff",
+    "description": "MeCab用辞書を用いたJavaScript形態素解析アプリです。"
+}
