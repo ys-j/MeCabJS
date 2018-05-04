@@ -36,7 +36,7 @@ self.onmessage = e => {
 				throw tx.error;
 			};
 			tx.onabort = e => {
-				throw '処理が中止されました';
+				throw tx.error;
 			};
 
 			let matrix = tx.objectStore('matrix');
