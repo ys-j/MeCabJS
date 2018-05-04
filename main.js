@@ -72,17 +72,17 @@ const POSID = [
 ];
 const UNKNOWN_DEFINITION_NAME = 'UNKNOWN_DEFINITION';
 const UNKNOWN_DEFINITION = JSON.parse(localStorage.getItem(UNKNOWN_DEFINITION_NAME) || null) || [
-	{ name: 'DEFAULT', invoke: false, regexp: '^$' }, // 0
-	{ name: 'SPACE', invoke: true, regexp: '^\s+$' }, // 1
-	{ name: 'KANJI', invoke: false, regexp: '^[⺀-⻳⼀-⿕々〇㐀-䶵一-龥豈-鶴侮-頻]{1,2}$' }, // 2
-	{ name: 'SYMBOL', invoke: true, regexp: '^[!-\/:-@\[-`\{-~¡-¿À-ȶḀ-ỹ！-／：-＠［-｀｛-･￠-\uffef\u2000-\u206f₠-⅏←-⥿⨀-\u2bff\u3000-\u303f㈀-㏿︰-﹫]+$' }, // 3
-	{ name: 'NUMERIC', invoke: true, regexp: '^[0-9０-９⁰-\u209f⅐-\u218f]+$' }, // 4
-	{ name: 'ALPHA', invoke: true, regexp: '^[A-Za-zＡ-Ｚａ-ｚ]+$' }, // 5
-	{ name: 'HIRAGANA', invoke: false, regexp: '^[ぁ-ゟー]{1,4}$' }, // 6
-	{ name: 'KATAKANA', invoke: true, regexp: '^[ァ-ヿㇰ-ㇿｦ-ﾝﾞﾟ]+$' }, // 7
-	{ name: 'KANJINUMERIC', invoke: true, regexp: '^[〇一二三四五六七八九十百千万億兆京]+$' }, // 8
-	{ name: 'GREEK', invoke: true, regexp: '^[ʹ-ϻ]+$' }, // 9
-	{ name: 'CYRILLIC', invoke: true, regexp: '^[Ѐ-ӹԀ-ԏ]+$' }, // 10
+	{ name: 'DEFAULT', invoke: false, regexp: '' }, // 0
+	{ name: 'SPACE', invoke: true, regexp: '\\s+' }, // 1
+	{ name: 'KANJI', invoke: false, regexp: '[⺀-⻳⼀-⿕々〇㐀-䶵一-龥豈-鶴侮-頻]{1,2}' }, // 2
+	{ name: 'SYMBOL', invoke: true, regexp: '[!-/:-@[-`{-~¡-¿À-ȶḀ-ỹ！-／：-＠［-｀｛-･￠-\uffef\u2000-\u206f₠-⅏←-⥿⨀-\\u2bff\\u3000-\\u303f㈀-㏿︰-﹫]+' }, // 3
+	{ name: 'NUMERIC', invoke: true, regexp: '[0-9０-９⁰-\u209f⅐-\u218f]+' }, // 4
+	{ name: 'ALPHA', invoke: true, regexp: '[A-Za-zＡ-Ｚａ-ｚ]+' }, // 5
+	{ name: 'HIRAGANA', invoke: false, regexp: '[ぁ-ゟー]{1,4}' }, // 6
+	{ name: 'KATAKANA', invoke: true, regexp: '[ァ-ヿㇰ-ㇿｦ-ﾝﾞﾟ]+' }, // 7
+	{ name: 'KANJINUMERIC', invoke: true, regexp: '[〇一二三四五六七八九十百千万億兆京]+' }, // 8
+	{ name: 'GREEK', invoke: true, regexp: '[ʹ-ϻ]+' }, // 9
+	{ name: 'CYRILLIC', invoke: true, regexp: '[Ѐ-ӹԀ-ԏ]+' }, // 10
 ];
 const BOS = {
 	word: '\x02',
@@ -167,7 +167,7 @@ class Lattice {
 								} else {
 									// Skip DEFAULT (k=0)
 									for (let k = 1; k < unkDic.length; k++) {
-										if (new RegExp(unkDic[k].regexp).test(targetKey)) {
+										if (new RegExp('^' + unkDic[k].regexp + '$').test(targetKey)) {
 											targets.push({
 												word: targetKey,
 												id: unkDic[k].id,
@@ -325,22 +325,27 @@ class Lattice {
 
 		let worker = new Worker('initialize.js');
 		worker.onmessage = e => {
-			const STATE = e.data.state;
-			const REST = e.data.rest;
-			if (STATE === 'waiting' && REST) {
-				status.value = MESSAGE.WAITING_DB + REST;
-			} else if (REST) {
-				status.value = MESSAGE.LOADING_DIC + REST;
-			} else {
-				worker.terminate();
-				buttons[0].className = '';
-				buttons[0].disabled = false;
-				buttons[1].disabled = false;
-				buttons[2].disabled = false;
-				buttons[3].disabled = false;
-				status.value = MESSAGE.DONE_LOADING;
-				const ERROR = e.data.error;
-				if (ERROR && ERROR.length) status.value += '（エラー：' + ERROR.length + '語未登録）';
+			switch (e.data.state) {
+				case 'waiting':
+					status.value = MESSAGE.WAITING_DB + e.data.rest;
+					break;
+				case 'processing':
+					status.value = MESSAGE.LOADING_DIC + e.data.rest;
+					break;
+				default:
+					worker.terminate();
+					buttons[0].className = '';
+					buttons[0].disabled = false;
+					buttons[1].disabled = false;
+					buttons[2].disabled = false;
+					buttons[3].disabled = false;
+					if (e.data.state === 'done') {
+						status.value = MESSAGE.DONE_LOADING;
+						if (e.data.error.length) status.value += '（エラー：' + e.data.error.length + '語未登録）';
+					} else {
+						status.value = MESSAGE.ERROR;
+						if (e.data.error) status.value += '（' + e.data.error + '）';
+					}
 			}
 		};
 		worker.onerror = e => {
@@ -436,7 +441,7 @@ class Lattice {
 
 	// Warning for not Firefox users
 	if (!/firefox/i.test(navigator.userAgent)) {
-		let strong = document.getElementById('ua-warning');
-		strong.style.color = '#c00';
+		let css = '#ua-warning{color:#c00;}';
+		document.head.insertAdjacentHTML('beforeend', '<style>' + css + '</style>');
 	}
 })();

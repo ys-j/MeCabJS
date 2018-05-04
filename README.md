@@ -11,4 +11,6 @@ MeCabをJavaScriptでネイティブに再現しようとした結果です。
 
 IndexedDBじゃなくてもよかったのですが、ウェブアプリっぽくしたかったので使ってみました。
 
-辞書は NAIST-jdic (NAIST Japanese Dictionary) を一部改変したものを使用していますので、修正BSDライセンスが適用されます。詳細は[こちら](naist-jdic.copying.txt)をご覧ください。
+辞書は NAIST-jdic (NAIST Japanese Dictionary) を一部改変したものを使用していますので、修正BSDライセンスが適用されます。[こちら](naist-jdic.copying.txt)をご覧ください。
+
+また、圧縮済み辞書の展開に[zlib.js](https://github.com/imaya/zlib.js)（MITライセンス）を使用しています。
