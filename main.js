@@ -426,8 +426,8 @@ class Lattice {
 						+ '<td>' + POSID[word.pos].join(' - ')
 						+ '<td>' + (word.cjg || []).join(' - ')
 						+ '<td>' + (word.base || word.cjg && word.word || '')
-						+ '<td>' + convertKana((word.orth || word.word), KANA_TYPE),
-						+ '<td>' + convertKana((word.pron || word.orth || word.word), KANA_TYPE),
+						+ '<td>' + convertKana((word.orth || word.word), KANA_TYPE.orth),
+						+ '<td>' + convertKana((word.pron || word.orth || word.word), KANA_TYPE.pron),
 						+ '<td>' + (word.note || '');
 				}
 			}
