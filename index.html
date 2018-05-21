@@ -23,11 +23,11 @@
 			<textarea placeholder=ここに解析したい文章を入力してください></textarea>
 			<button type=submit>解析</button>
 		</form>
-		<table>
+		<table id=table>
 			<caption>解析結果
 			<thead>
-				<tr><th><th>品詞<th>活用<th>基本形<th>読み<th>発音<th>備考
-			<tbody id=output>
+				<tr><th><th>品詞<th>活用<th>基本形<th><a href=# role=button>読み</a><th><a href=# role=button>発音</a><th>備考
+			<tbody>
 		</table>
 	</main>
 	<footer>
@@ -39,6 +39,24 @@
 	</footer>
 	<div id=overlay hidden>
 		<div id=popup>
+			<form name=kanatype>
+				<fieldset>
+					<legend>出力する仮名タイプを変更する</legend>
+					<dl>
+						<dt>
+							<div>読み</div>
+						<dd>
+							<label><input type=radio name=okana value=ひらがな>ひらがな</label>
+							<label><input type=radio name=okana value=カタカナ>カタカナ</label>
+						<dt>
+							<div>発音</div>
+						<dd>
+							<label><input type=radio name=pkana value=ひらがな>ひらがな</label>
+							<label><input type=radio name=pkana value=カタカナ>カタカナ</label>
+					</dl>
+					<button>変更</button>
+				</fieldset>
+			</form>
 			<form name=addword>
 				<fieldset>
 					<legend>単語を追加する</legend>

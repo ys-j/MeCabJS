@@ -481,6 +481,7 @@ const CONTEXT_TYPE = {
 (function () {
 	let buttons = document.getElementsByTagName('button');
 	let overlay = document.getElementById('overlay');
+	let kanatype = document.forms.kanatype;
 	let addword = document.forms.addword;
 	let unknown = document.forms.unknown;
 	
@@ -489,9 +490,33 @@ const CONTEXT_TYPE = {
 	buttons[2].onclick = e => {
 		overlay.hidden = false;
 	}
-	buttons[6].onclick = e => {
+	buttons[7].onclick = e => {
 		overlay.hidden = true;
 	};
+
+	// kanatype
+	for (let k in KANA_TYPE) {
+		for (let r of kanatype[k.charAt(0) + 'kana']) {
+			r.checked = r.value === KANA_TYPE[k];
+		}
+	}
+	kanatype.onsubmit = e => {
+		let values = {
+			orth: kanatype.okana.value,
+			pron: kanatype.pkana.value,
+		};
+		let confirmed = confirm(
+			'出力する仮名の種類を変更しますか？\n\n'
+			+ '読み: ' + values.orth + '\n'
+			+ '発音: ' + values.pron
+		);
+		if (confirmed) {
+			KANA_TYPE = values;
+			localStorage.setItem(KANA_TYPE_NAME, JSON.stringify(KANA_TYPE));
+			if (confirm('出力設定を変更しました\n変更を反映するためにページを更新しますか？')) location.reload();
+		}
+		return false;
+	}
 	
 	// addword
 	addword.pos.innerHTML = POSID.map((v, i) => '<option value=' + i + '>' + v.join(' - ')).join('');

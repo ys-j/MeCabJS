@@ -4,6 +4,9 @@ body {
 	line-height: 1.6;
 	padding: 1em;
 }
+a {
+	text-decoration: none;
+}
 .centered > * {
 	display: block;
 	word-break: keep-all;

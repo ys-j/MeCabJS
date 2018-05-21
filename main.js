@@ -84,6 +84,11 @@ const UNKNOWN_DEFINITION = JSON.parse(localStorage.getItem(UNKNOWN_DEFINITION_NA
 	{ name: 'GREEK', invoke: true, regexp: '[ʹ-ϻ]+' }, // 9
 	{ name: 'CYRILLIC', invoke: true, regexp: '[Ѐ-ӹԀ-ԏ]+' }, // 10
 ];
+const KANA_TYPE_NAME = 'KANA_TYPE';
+const KANA_TYPE = JSON.parse(localStorage.getItem(KANA_TYPE_NAME) || null) || {
+	orth: 'ひらがな',
+	pron: 'ひらがな',
+};
 const BOS = {
 	word: '\x02',
 	id: 0,
@@ -98,6 +103,8 @@ const EOS = {
 };
 
 const MESSAGE = {
+	COPIED: 'をクリップボードにコピーしました',
+	COPY_FAILED: 'のコピーに失敗しました',
 	DELETING_DIC: '辞書を削除しています',
 	DONE_DELETING: '辞書を削除しました',
 	DONE_LOADING: '辞書の読み込みが完了しました',
@@ -124,13 +131,13 @@ class Path extends Array {
 		newPath.cost = cost;
 		return newPath;
 	}
+	static from(arraylike) {
+		let length = arraylike.length;
+		let path = new Path(length)
+		for (let i = 0; i < length; i++) path[i] = arraylike[i];
+		return path;
+	}
 }
-Path.from = arraylike => {
-	let length = arraylike.length;
-	let path = new Path(length)
-	for (let i = 0; i < length; i++) path[i] = arraylike[i];
-	return path;
-};
 
 let mtx = [];
 
@@ -156,7 +163,7 @@ class Lattice {
 					for (let j = i; j < CHAR_LENGTH; j++) {
 						promises.push(new Promise((resolve, reject) => {
 							let targetKey = chars.slice(i, j+1).join('');
-							let req = dic.openCursor(targetKey);
+							let req = dic.openCursor(Halfwidth2Fullwidth(targetKey));
 							req.onsuccess = e => {
 								let cursor = e.target.result;
 								if (cursor) {
@@ -311,7 +318,8 @@ class Lattice {
 	let status = document.getElementById('status');
 	let form = document.forms.main;
 	let textarea = form[0];
-	let output = document.getElementById('output');
+	let table = document.getElementById('table');
+	let output = table.tBodies[0];
 	let overlay = document.getElementById('overlay');
 	
 	// Saving Dictionary
@@ -397,10 +405,9 @@ class Lattice {
 		buttons[3].disabled = true;
 		status.value = MESSAGE.PARSING;
 		let outputHTML = '';
-		let inputs = textarea.value.split(/(.*?。)\s*/);
 		let lattices = [];
-		for (let i = 0; i < inputs.length; i++) {
-			if (inputs[i]) lattices.push(new Lattice(inputs[i]));
+		for (let input of textarea.value.split(/(.*?。)\s*/)) {
+			if (input) lattices.push(new Lattice(input));
 		}
 		let promises = lattices.map(lattice => new Promise((resolve, reject) => {
 			lattice.lookup(unkDicNormal || [])
@@ -415,12 +422,12 @@ class Lattice {
 				for (let j = 0; j < values[i].length; j++) {
 					let word = values[i][j];
 					outputHTML += '<tr>'
-						+ '<th>' + word.word
+						+ '<th>' + Fullwidth2Halfwidth(word.word)
 						+ '<td>' + POSID[word.pos].join(' - ')
 						+ '<td>' + (word.cjg || []).join(' - ')
 						+ '<td>' + (word.base || word.cjg && word.word || '')
-						+ '<td>' + (word.orth || word.word)
-						+ '<td>' + (word.pron || word.orth || word.word)
+						+ '<td>' + convertKana((word.orth || word.word), KANA_TYPE),
+						+ '<td>' + convertKana((word.pron || word.orth || word.word), KANA_TYPE),
 						+ '<td>' + (word.note || '');
 				}
 			}
@@ -439,9 +446,94 @@ class Lattice {
 		return false;
 	};
 
+	// Enable copy buttons
+	let dummy = document.createElement('textarea');
+	let ths = table.rows[0].children;
+	for (let i = 0; i < ths.length; i++) {
+		let a = ths[i].firstElementChild;
+		if (a) {
+			a.onclick = e => {
+				let v = '';
+				let cols = output.querySelectorAll('td:nth-of-type(' + i + ')');
+				for (let c of cols) {
+					v += c.textContent;
+				}
+				document.body.appendChild(dummy);
+				dummy.value = v;
+				dummy.select();
+				let copied = document.execCommand('copy');
+				status.value = a.textContent + (copied ? MESSAGE.COPIED : MESSAGE.COPY_FAILED);
+				document.body.removeChild(dummy);
+				return false;
+			}
+		}
+	}
+
 	// Warning for not Firefox users
 	if (!/firefox/i.test(navigator.userAgent)) {
 		let css = '#ua-warning{color:#c00;}';
 		document.head.insertAdjacentHTML('beforeend', '<style>' + css + '</style>');
 	}
 })();
+
+function convertKana(str, type) {
+	if (type === 'ひらがな') {
+		return Katakana2Hiragana(str);
+	} else if (type === 'カタカナ') {
+		return Hiragana2Katakana(str);
+	} else {
+		return str;
+	}
+}
+function Katakana2Hiragana(str) {
+	if (!str) return '';
+	let result = [];
+	for (let s of str) {
+		let codepoint = s.codePointAt(0);
+		if (0x30a0 < codepoint && codepoint < 0x30f5) {
+			result.push(String.fromCharCode(codepoint - 96));
+		} else {
+			result.push(s);
+		}
+	}
+	return result.join('');
+}
+function Hiragana2Katakana(str) {
+	if (!str) return '';
+	let result = [];
+	for (let s of str) {
+		let codepoint = s.codePointAt(0);
+		if (0x3040 < codepoint && codepoint < 0x3095) {
+			result.push(String.fromCharCode(codepoint + 96));
+		} else {
+			result.push(s);
+		}
+	}
+	return result.join('');
+}
+function Fullwidth2Halfwidth(str) {
+	if (!str) return '';
+	let result = [];
+	for (let s of str) {
+		let codepoint = s.codePointAt(0);
+		if (0xff00 < codepoint && codepoint < 0xff5f) {
+			result.push(String.fromCharCode(codepoint - 65248));
+		} else {
+			result.push(s);
+		}
+	}
+	return result.join('');
+}
+function Halfwidth2Fullwidth(str) {
+	if (!str) return '';
+	let result = [];
+	for (let s of str) {
+		let codepoint = s.codePointAt(0);
+		if (0x0020 < codepoint && codepoint < 0x007f) {
+			result.push(String.fromCharCode(codepoint + 65248));
+		} else {
+			result.push(s);
+		}
+	}
+	return result.join('');
+}
