@@ -74,7 +74,7 @@ const UNKNOWN_DEFINITION_NAME = 'UNKNOWN_DEFINITION';
 const UNKNOWN_DEFINITION = JSON.parse(localStorage.getItem(UNKNOWN_DEFINITION_NAME) || null) || [
 	{ name: 'DEFAULT', invoke: false, regexp: '' }, // 0
 	{ name: 'SPACE', invoke: true, regexp: '\\s+' }, // 1
-	{ name: 'KANJI', invoke: false, regexp: '[⺀-⻳⼀-⿕々〇㐀-䶵一-龥豈-鶴侮-頻]{1,2}' }, // 2
+	{ name: 'KANJI', invoke: false, regexp: '[⺀-⻳⼀-⿕々〇〻㐀-䶵一-龥豈-鶴侮-頻]{1,2}' }, // 2
 	{ name: 'SYMBOL', invoke: true, regexp: '[!-/:-@[-`{-~¡-¿À-ȶḀ-ỹ！-／：-＠［-｀｛-･￠-\uffef\u2000-\u206f₠-⅏←-⥿⨀-\\u2bff\\u3000-\\u303f㈀-㏿︰-﹫]+' }, // 3
 	{ name: 'NUMERIC', invoke: true, regexp: '[0-9０-９⁰-\u209f⅐-\u218f]+' }, // 4
 	{ name: 'ALPHA', invoke: true, regexp: '[A-Za-zＡ-Ｚａ-ｚ]+' }, // 5
@@ -85,9 +85,11 @@ const UNKNOWN_DEFINITION = JSON.parse(localStorage.getItem(UNKNOWN_DEFINITION_NA
 	{ name: 'CYRILLIC', invoke: true, regexp: '[Ѐ-ӹԀ-ԏ]+' }, // 10
 ];
 const KANA_TYPE_NAME = 'KANA_TYPE';
-const KANA_TYPE = JSON.parse(localStorage.getItem(KANA_TYPE_NAME) || null) || {
-	orth: 'ひらがな',
-	pron: 'ひらがな',
+
+// variable (may change by configration.js)
+let KANA_TYPE = JSON.parse(localStorage.getItem(KANA_TYPE_NAME) || null) || {
+	orth: 'ALL_HIRAGANA',
+	pron: 'ALL_HIRAGANA',
 };
 const BOS = {
 	word: '\x02',
@@ -418,18 +420,8 @@ class Lattice {
 				.catch(e => reject(e));
 		}));
 		Promise.all(promises).then(values => {
-			for (let i = 0; i < values.length; i++) {
-				for (let j = 0; j < values[i].length; j++) {
-					let word = values[i][j];
-					outputHTML += '<tr>'
-						+ '<th>' + Fullwidth2Halfwidth(word.word)
-						+ '<td>' + POSID[word.pos].join(' - ')
-						+ '<td>' + (word.cjg || []).join(' - ')
-						+ '<td>' + (word.base || word.cjg && word.word || '')
-						+ '<td>' + convertKana((word.orth || word.word), KANA_TYPE.orth),
-						+ '<td>' + convertKana((word.pron || word.orth || word.word), KANA_TYPE.pron),
-						+ '<td>' + (word.note || '');
-				}
+			for (let v of values) {
+				outputHTML += v.map(formatOutput).join('');
 			}
 			output.innerHTML = outputHTML;
 			status.value = MESSAGE.DONE_PARSING;
@@ -445,6 +437,23 @@ class Lattice {
 		});
 		return false;
 	};
+	
+	function formatOutput(wobj) {
+		const CONVERTER = {
+			ALL_HIRAGANA: Katakana2Hiragana,
+			ALL_KATAKANA: Hiragana2Katakana,
+			KANJI_HIRAGANA: (str, orig) => isKanji(orig) ? Katakana2Hiragana(str) : '',
+			KANJI_KATAKANA: (str, orig) => isKanji(orig) ? Hiragana2Katakana(str) : '',
+		};
+		let word = Fullwidth2Halfwidth(wobj.word); // 全角英数から半角英数に
+		let pos = POSID[wobj.pos].join(' - ');
+		let cjg = (wobj.cjg || []).join(' - ');
+		let base = wobj.base || (cjg && word) || '';
+		let orth = CONVERTER[KANA_TYPE.orth](wobj.orth || word, word);
+		let pron = CONVERTER[KANA_TYPE.pron](wobj.pron || wobj.orth || word, word);
+		let note = wobj.note || '';
+		return `<tr><th>${word}<td>${pos}<td>${cjg}<td>${base}<td>${orth}<td>${pron}<td>${note}`;
+	}
 
 	// Enable copy buttons
 	let dummy = document.createElement('textarea');
@@ -476,22 +485,34 @@ class Lattice {
 	}
 })();
 
-function convertKana(str, type) {
-	if (type === 'ひらがな') {
-		return Katakana2Hiragana(str);
-	} else if (type === 'カタカナ') {
-		return Hiragana2Katakana(str);
-	} else {
-		return str;
+function isKanji(str) {
+	const inRange = v => (0x2e80 <= v && v <= 0x2ffff) && (
+		v <= 0x2fdf
+		|| v === 0x3005
+		|| v === 0x3007
+		|| v === 0x303b
+		|| (0x3400 <= v && v <= 0x4dbf)
+		|| (0x4e00 <= v && v <= 0x9fff)
+		|| (0xf900 <= v && v <= 0xfaff)
+		|| 0x20000 <= v
+	);
+	let result = false;
+	for (let s of str) {
+		let p = s.codePointAt(0);
+		if (inRange(p)) {
+			result = true;
+			break;
+		}
 	}
+	return result;
 }
 function Katakana2Hiragana(str) {
 	if (!str) return '';
 	let result = [];
 	for (let s of str) {
-		let codepoint = s.codePointAt(0);
-		if (0x30a0 < codepoint && codepoint < 0x30f5) {
-			result.push(String.fromCharCode(codepoint - 96));
+		let p = s.codePointAt(0);
+		if (0x30a0 < p && p < 0x30f5) {
+			result.push(String.fromCharCode(p - 96));
 		} else {
 			result.push(s);
 		}
@@ -502,9 +523,9 @@ function Hiragana2Katakana(str) {
 	if (!str) return '';
 	let result = [];
 	for (let s of str) {
-		let codepoint = s.codePointAt(0);
-		if (0x3040 < codepoint && codepoint < 0x3095) {
-			result.push(String.fromCharCode(codepoint + 96));
+		let p = s.codePointAt(0);
+		if (0x3040 < p && p < 0x3095) {
+			result.push(String.fromCharCode(p + 96));
 		} else {
 			result.push(s);
 		}
@@ -515,9 +536,9 @@ function Fullwidth2Halfwidth(str) {
 	if (!str) return '';
 	let result = [];
 	for (let s of str) {
-		let codepoint = s.codePointAt(0);
-		if (0xff00 < codepoint && codepoint < 0xff5f) {
-			result.push(String.fromCharCode(codepoint - 65248));
+		let p = s.codePointAt(0);
+		if (0xff00 < p && p < 0xff5f) {
+			result.push(String.fromCharCode(p - 65248));
 		} else {
 			result.push(s);
 		}
@@ -528,9 +549,9 @@ function Halfwidth2Fullwidth(str) {
 	if (!str) return '';
 	let result = [];
 	for (let s of str) {
-		let codepoint = s.codePointAt(0);
-		if (0x0020 < codepoint && codepoint < 0x007f) {
-			result.push(String.fromCharCode(codepoint + 65248));
+		let p = s.codePointAt(0);
+		if (0x0020 < p && p < 0x007f) {
+			result.push(String.fromCharCode(p + 65248));
 		} else {
 			result.push(s);
 		}

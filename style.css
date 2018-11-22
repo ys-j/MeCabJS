@@ -101,7 +101,8 @@ dt {
 	min-width: 4em;
 }
 dd {
-	display: inline;
+	display: flex;
+	flex-flow: column nowrap;
 	margin: 0;
 }
 dd::after {
@@ -123,10 +124,6 @@ dd > div > :required {
 }
 dt > div {
 	line-height: 3.2;
-}
-dd label::after {
-	display: block;
-	content: '';
 }
 fieldset > button {
 	position: absolute;

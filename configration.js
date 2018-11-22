@@ -500,7 +500,7 @@ const CONTEXT_TYPE = {
 			r.checked = r.value === KANA_TYPE[k];
 		}
 	}
-	kanatype.onsubmit = e => {
+	kanatype.onsubmit = () => {
 		let values = {
 			orth: kanatype.okana.value,
 			pron: kanatype.pkana.value,

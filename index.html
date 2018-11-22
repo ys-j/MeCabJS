@@ -23,10 +23,18 @@
 			<textarea placeholder=ここに解析したい文章を入力してください></textarea>
 			<button type=submit>解析</button>
 		</form>
+		<p id=rubyout></p>
 		<table id=table>
-			<caption>解析結果
+			<caption>解析結果</caption>
 			<thead>
-				<tr><th><th>品詞<th>活用<th>基本形<th><a href=# role=button>読み</a><th><a href=# role=button>発音</a><th>備考
+				<tr>
+					<th>
+					<th>品詞
+					<th>活用
+					<th>基本形
+					<th><a href=# role=button>読み</a>
+					<th><a href=# role=button>発音</a>
+					<th>備考
 			<tbody>
 		</table>
 	</main>
@@ -46,13 +54,17 @@
 						<dt>
 							<div>読み</div>
 						<dd>
-							<label><input type=radio name=okana value=ひらがな>ひらがな</label>
-							<label><input type=radio name=okana value=カタカナ>カタカナ</label>
+							<label><input type=radio name=okana value=ALL_HIRAGANA>ひらがな（全て）</label>
+							<label><input type=radio name=okana value=ALL_KATAKANA>カタカナ（全て）</label>
+							<label><input type=radio name=okana value=KANJI_HIRAGANA>ひらがな（漢字のみ）</label>
+							<label><input type=radio name=okana value=KANJI_KATAKANA>カタカナ（漢字のみ）</label>
 						<dt>
 							<div>発音</div>
 						<dd>
-							<label><input type=radio name=pkana value=ひらがな>ひらがな</label>
-							<label><input type=radio name=pkana value=カタカナ>カタカナ</label>
+							<label><input type=radio name=pkana value=ALL_HIRAGANA>ひらがな</label>
+							<label><input type=radio name=pkana value=ALL_KATAKANA>カタカナ</label>
+							<label><input type=radio name=pkana value=KANJI_HIRAGANA>ひらがな（漢字のみ）</label>
+							<label><input type=radio name=pkana value=KANJI_KATAKANA>カタカナ（漢字のみ）</label>
 					</dl>
 					<button>変更</button>
 				</fieldset>
