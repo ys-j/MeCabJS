@@ -52,12 +52,15 @@ button[disabled] {
 	box-sizing: border-box;
 	text-align: center;
 }
-form {
+.flex {
 	display: flex;
 	justify-content: center;
 }
-textarea {
+.flex > :first-child {
+	border: 1px solid #aaa;
 	flex: 1 1 40em;
+	padding: .25em;
+	text-align: left;
 }
 tr:nth-of-type(2n) {
 	background-color: #eee;

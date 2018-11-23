@@ -74,9 +74,9 @@ const UNKNOWN_DEFINITION_NAME = 'UNKNOWN_DEFINITION';
 const UNKNOWN_DEFINITION = JSON.parse(localStorage.getItem(UNKNOWN_DEFINITION_NAME) || null) || [
 	{ name: 'DEFAULT', invoke: false, regexp: '' }, // 0
 	{ name: 'SPACE', invoke: true, regexp: '\\s+' }, // 1
-	{ name: 'KANJI', invoke: false, regexp: '[⺀-⻳⼀-⿕々〇〻㐀-䶵一-龥豈-鶴侮-頻]{1,2}' }, // 2
-	{ name: 'SYMBOL', invoke: true, regexp: '[!-/:-@[-`{-~¡-¿À-ȶḀ-ỹ！-／：-＠［-｀｛-･￠-\uffef\u2000-\u206f₠-⅏←-⥿⨀-\\u2bff\\u3000-\\u303f㈀-㏿︰-﹫]+' }, // 3
-	{ name: 'NUMERIC', invoke: true, regexp: '[0-9０-９⁰-\u209f⅐-\u218f]+' }, // 4
+	{ name: 'KANJI', invoke: false, regexp: '[\u{2e80}-\u{2fdf}々〇〻\u{3400}-\u{4dbf}\u{4e00}-\u{9fff}\u{f900}-\u{faff}\u{20000}-\u{2ffff}]{1,2}' }, // 2
+	{ name: 'SYMBOL', invoke: true, regexp: '[!-/:-@[-`{-~¡-¿À-ȶḀ-ỹ！-／：-＠［-｀｛-･￠-\u{ffef}\u{2000}-\u{206f}₠-⅏←-⥿⨀-\u{2bff}\u{3000}-\u{303f}㈀-㏿︰-﹫]+' }, // 3
+	{ name: 'NUMERIC', invoke: true, regexp: '[0-9０-９⁰-\u{209f}⅐-\u{218f}]+' }, // 4
 	{ name: 'ALPHA', invoke: true, regexp: '[A-Za-zＡ-Ｚａ-ｚ]+' }, // 5
 	{ name: 'HIRAGANA', invoke: false, regexp: '[ぁ-ゟー]{1,4}' }, // 6
 	{ name: 'KATAKANA', invoke: true, regexp: '[ァ-ヿㇰ-ㇿｦ-ﾝﾞﾟ]+' }, // 7
@@ -176,7 +176,7 @@ class Lattice {
 								} else {
 									// Skip DEFAULT (k=0)
 									for (let k = 1; k < unkDic.length; k++) {
-										if (new RegExp('^' + unkDic[k].regexp + '$').test(targetKey)) {
+										if (new RegExp('^' + unkDic[k].regexp + '$', 'u').test(targetKey)) {
 											targets.push({
 												word: targetKey,
 												id: unkDic[k].id,
@@ -320,9 +320,9 @@ class Lattice {
 	let status = document.getElementById('status');
 	let form = document.forms.main;
 	let textarea = form[0];
+	let rubyout = document.getElementById('rubyout');
 	let table = document.getElementById('table');
 	let output = table.tBodies[0];
-	let overlay = document.getElementById('overlay');
 	
 	// Saving Dictionary
 	buttons[0].onclick = () => {
@@ -397,6 +397,11 @@ class Lattice {
 		document.body.appendChild(script);
 		e.target.onclick = null;
 	};
+
+	// Copy ruby
+	buttons[4].onclick = () => {
+		status.value = '振り仮名付きテキスト' + (copyString(rubyout.textContent) ? MESSAGE.COPIED : MESSAGE.COPY_FAILED);
+	}
 	
 	// Tokenization
 	form.onsubmit = () => {
@@ -406,7 +411,7 @@ class Lattice {
 		buttons[3].className = 'active';
 		buttons[3].disabled = true;
 		status.value = MESSAGE.PARSING;
-		let outputHTML = '';
+		let outputHTML = '', outputRuby = '';
 		let lattices = [];
 		for (let input of textarea.value.split(/(.*?。)\s*/)) {
 			if (input) lattices.push(new Lattice(input));
@@ -422,8 +427,10 @@ class Lattice {
 		Promise.all(promises).then(values => {
 			for (let v of values) {
 				outputHTML += v.map(formatOutput).join('');
+				outputRuby += v.map(formatRuby).join('');
 			}
 			output.innerHTML = outputHTML;
+			rubyout.innerHTML = outputRuby;
 			status.value = MESSAGE.DONE_PARSING;
 		}, e => {
 			status.value = MESSAGE.ERROR;
@@ -442,37 +449,55 @@ class Lattice {
 		const CONVERTER = {
 			ALL_HIRAGANA: Katakana2Hiragana,
 			ALL_KATAKANA: Hiragana2Katakana,
-			KANJI_HIRAGANA: (str, orig) => isKanji(orig) ? Katakana2Hiragana(str) : '',
-			KANJI_KATAKANA: (str, orig) => isKanji(orig) ? Hiragana2Katakana(str) : '',
+			KANJI_HIRAGANA: (str, orig) => includesKanji(orig) ? Katakana2Hiragana(str) : '',
+			KANJI_KATAKANA: (str, orig) => includesKanji(orig) ? Hiragana2Katakana(str) : '',
 		};
-		let word = Fullwidth2Halfwidth(wobj.word); // 全角英数から半角英数に
-		let pos = POSID[wobj.pos].join(' - ');
-		let cjg = (wobj.cjg || []).join(' - ');
-		let base = wobj.base || (cjg && word) || '';
-		let orth = CONVERTER[KANA_TYPE.orth](wobj.orth || word, word);
-		let pron = CONVERTER[KANA_TYPE.pron](wobj.pron || wobj.orth || word, word);
-		let note = wobj.note || '';
+		const word = Fullwidth2Halfwidth(wobj.word); // 全角英数から半角英数に
+		const pos = POSID[wobj.pos].join(' - ');
+		const cjg = (wobj.cjg || []).join(' - ');
+		const base = wobj.base || (cjg && word) || '';
+		const orth = CONVERTER[KANA_TYPE.orth](wobj.orth || !includesKanji(word) && word, word);
+		const pron = CONVERTER[KANA_TYPE.pron](wobj.pron || wobj.orth || !includesKanji(word) && word, word);
+		const note = wobj.note || '';
 		return `<tr><th>${word}<td>${pos}<td>${cjg}<td>${base}<td>${orth}<td>${pron}<td>${note}`;
 	}
+	function formatRuby(wobj) {
+		const word = Fullwidth2Halfwidth(wobj.word);
+		const orth = Katakana2Hiragana(wobj.orth);
+		if (orth) {
+			const arrW = [...word], arrO = [...orth];
+			let result = '', temp = '';
+			let i = 0, j = 0, k = 0;
+			while (i <= arrW.length) {
+				const current = arrW[i++] || '';
+				if (!isKanji(current)) {
+					j = arrO.indexOf(current, j);
+					let yomi = (j > -1 ? arrO.slice(k, j) : arrO.slice(k)).join('');
+					result += (temp ? `<ruby>${temp}<rp>（<rt>${yomi}<rp>）</ruby>` : '') + current;
+					temp = '';
+					k = i;
+				} else {
+					temp += current;
+				}
+			}
+			return result;
+		} else {
+			return word;
+		}
+	}
 
-	// Enable copy buttons
-	let dummy = document.createElement('textarea');
+	// Enable copy buttons (table)
 	let ths = table.rows[0].children;
 	for (let i = 0; i < ths.length; i++) {
 		let a = ths[i].firstElementChild;
 		if (a) {
-			a.onclick = e => {
+			a.onclick = () => {
 				let v = '';
 				let cols = output.querySelectorAll('td:nth-of-type(' + i + ')');
 				for (let c of cols) {
 					v += c.textContent;
 				}
-				document.body.appendChild(dummy);
-				dummy.value = v;
-				dummy.select();
-				let copied = document.execCommand('copy');
-				status.value = a.textContent + (copied ? MESSAGE.COPIED : MESSAGE.COPY_FAILED);
-				document.body.removeChild(dummy);
+				status.value = a.textContent + (copyString(v) ? MESSAGE.COPIED : MESSAGE.COPY_FAILED);
 				return false;
 			}
 		}
@@ -485,21 +510,38 @@ class Lattice {
 	}
 })();
 
-function isKanji(str) {
-	const inRange = v => (0x2e80 <= v && v <= 0x2ffff) && (
-		v <= 0x2fdf
-		|| v === 0x3005
-		|| v === 0x3007
-		|| v === 0x303b
-		|| (0x3400 <= v && v <= 0x4dbf)
-		|| (0x4e00 <= v && v <= 0x9fff)
-		|| (0xf900 <= v && v <= 0xfaff)
-		|| 0x20000 <= v
-	);
+function copyString(str) {
+	const dummy = document.createElement('textarea');
+	document.body.appendChild(dummy);
+	dummy.value = str;
+	dummy.select();
+	const copied = document.execCommand('copy');
+	document.body.removeChild(dummy);
+	return copied;
+}
+
+function isKanji(str, i) {
+	if (typeof str === 'string') {
+		const p = str.codePointAt(i || 0);
+		return (0x2e80 <= p && p <= 0x2ffff) && (
+			p <= 0x2fdf
+			|| p === 0x3005
+			|| p === 0x3007
+			|| p === 0x303b
+			|| (0x3400 <= p && p <= 0x4dbf)
+			|| (0x4e00 <= p && p <= 0x9fff)
+			|| (0xf900 <= p && p <= 0xfaff)
+			|| 0x20000 <= p
+		);
+	} else {
+		return false;
+	}
+}
+
+function includesKanji(str) {
 	let result = false;
 	for (let s of str) {
-		let p = s.codePointAt(0);
-		if (inRange(p)) {
+		if (isKanji(s)) {
 			result = true;
 			break;
 		}
@@ -537,7 +579,7 @@ function Fullwidth2Halfwidth(str) {
 	let result = [];
 	for (let s of str) {
 		let p = s.codePointAt(0);
-		if (0xff00 < p && p < 0xff5f) {
+		if ((0xff00 < p && p < 0xff08) || (0xff09 < p && p < 0xff5f)) {
 			result.push(String.fromCharCode(p - 65248));
 		} else {
 			result.push(s);

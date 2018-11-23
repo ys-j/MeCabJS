@@ -490,7 +490,7 @@ const CONTEXT_TYPE = {
 	buttons[2].onclick = e => {
 		overlay.hidden = false;
 	}
-	buttons[7].onclick = e => {
+	buttons[8].onclick = e => {
 		overlay.hidden = true;
 	};
 

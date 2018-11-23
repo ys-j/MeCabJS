@@ -19,11 +19,14 @@
 			<button>設定</button>
 			<input id=status size=60 readonly>
 		</div>
-		<form name=main>
+		<form name=main class=flex>
 			<textarea placeholder=ここに解析したい文章を入力してください></textarea>
 			<button type=submit>解析</button>
 		</form>
-		<p id=rubyout></p>
+		<div class=flex>
+			<p id=rubyout>ここに<ruby>振<rp>（<rt>ふ<rp>）</ruby>り<ruby>仮名<rp>（<rt>がな<rp>）</ruby>が<ruby>表示<rp>（<rt>ひょうじ<rp>）</ruby>されます</p>
+			<button>コピー</button>
+		</div>
 		<table id=table>
 			<caption>解析結果</caption>
 			<thead>
