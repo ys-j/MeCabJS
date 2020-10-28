@@ -3,13 +3,10 @@ MeCabをJavaScriptでネイティブに再現しようとした結果です。
 
 **＞＞[ページはこちらから](https://ys-j.github.io/MeCabJS/)＜＜**
 
-推奨環境は Windows 10 x64 Firefox 最新版。Chromeではなぜか辞書の読み込みに時間がかかる上、結果的に失敗します。IE/Edgeからの利用は考慮していません。
-- Promise
+推奨環境は Firefox/Chrome/Edge 最新版。IEからの利用は考慮していません。
 - Fetch API
 - Web Workers API
 - IndexedDB API
-
-IndexedDBじゃなくてもよかったのですが、ウェブアプリっぽくしたかったので使ってみました。
 
 辞書は NAIST-jdic (NAIST Japanese Dictionary) を一部改変したものを使用していますので、修正BSDライセンスが適用されます。[こちら](naist-jdic.copying.txt)をご覧ください。
 
